@@ -1,0 +1,105 @@
+{
+  "_comment": "Shared encode/decode vectors for web/protocol.js and custom_components/guoran_nixie/protocol.py. Derived from the original app's www/js/index.js; see docs/PROTOCOL.md.",
+  "color": [
+    { "rgb": [255, 0, 0], "command": "R255-G000-B000" },
+    { "rgb": [0, 255, 255], "command": "R000-G255-B255" },
+    { "rgb": [7, 42, 199], "command": "R007-G042-B199" },
+    { "rgb": [0, 0, 0], "command": "R000-G000-B000" }
+  ],
+  "color_invalid": [[256, 0, 0], [-1, 0, 0], [0, 0, 300]],
+  "toggle": [
+    { "toggle": "tube_1", "on": true, "command": "S11" },
+    { "toggle": "tube_6", "on": false, "command": "S60" },
+    { "toggle": "time_sync", "on": true, "command": "S71" },
+    { "toggle": "alarm_1", "on": true, "command": "S81" },
+    { "toggle": "alarm_2", "on": false, "command": "S90" },
+    { "toggle": "schedule", "on": true, "command": "S01" },
+    { "toggle": "auto_brightness", "on": true, "command": "SA1" },
+    { "toggle": "hour_12", "on": false, "command": "SB0" },
+    { "toggle": "ambient_light", "on": true, "command": "SC1" },
+    { "toggle": "hourly_chime", "on": true, "command": "SD1" },
+    { "toggle": "english_voice", "on": false, "command": "SE0" },
+    { "toggle": "sensor_switch", "on": true, "command": "SF1" }
+  ],
+  "key": [
+    { "key": "previous", "command": "K01" },
+    { "key": "mode", "command": "K02" },
+    { "key": "next", "command": "K03" },
+    { "key": "power", "command": "K04" },
+    { "key": "back", "command": "K05" },
+    { "key": "plus", "command": "K06" },
+    { "key": "set", "command": "K07" },
+    { "key": "ok", "command": "K08" },
+    { "key": "minus", "command": "K09" }
+  ],
+  "time": [
+    { "setting": "alarm_1", "time": "07:05", "command": "A07:05A" },
+    { "setting": "alarm_2", "time": "23:59", "command": "A23:59B" },
+    { "setting": "power_on", "time": "00:00", "command": "T00:00O" },
+    { "setting": "power_off", "time": "18:30", "command": "T18:30C" }
+  ],
+  "time_invalid": [[24, 0], [12, 60], [-1, 0]],
+  "time_sync": [
+    { "local": "2026-10-25T09:03:07", "command": "$2026-10-25;09:03:07;00" },
+    { "local": "2026-10-31T23:59:59", "command": "$2026-10-31;23:59:59;06" }
+  ],
+  "auth": [
+    { "old": "210709", "new": "210709", "command": "210709210709" },
+    { "old": "000000", "new": "210709", "command": "000000210709" }
+  ],
+  "auth_invalid": [["21070", "210709"], ["210709", "2107090"], ["abcdef", "210709"]],
+  "auth_result": [
+    { "byte": 0, "result": "ok" },
+    { "byte": 1, "result": "wrong_password" },
+    { "byte": 2, "result": "password_changed" },
+    { "byte": 3, "result": "password_removed" }
+  ],
+  "auth_result_invalid": [[], [4], [48], [0, 0]],
+  "hue": [
+    { "position": 0, "rgb": [255, 0, 0] },
+    { "position": 128, "rgb": [255, 128, 0] },
+    { "position": 255, "rgb": [255, 255, 0] },
+    { "position": 300, "rgb": [210, 255, 0] },
+    { "position": 510, "rgb": [0, 255, 0] },
+    { "position": 765, "rgb": [0, 255, 255] },
+    { "position": 1000, "rgb": [0, 20, 255] },
+    { "position": 1275, "rgb": [255, 0, 255] },
+    { "position": 1400, "rgb": [255, 0, 130] }
+  ],
+  "status": {
+    "frame": "R000-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CCSS",
+    "expected": {
+      "rgb": [0, 255, 255],
+      "toggles": {
+        "tube_1": true,
+        "tube_2": true,
+        "tube_3": false,
+        "tube_4": true,
+        "tube_5": true,
+        "tube_6": true,
+        "time_sync": false,
+        "alarm_1": true,
+        "alarm_2": false,
+        "schedule": true,
+        "auto_brightness": true,
+        "hour_12": false,
+        "ambient_light": true,
+        "hourly_chime": false,
+        "english_voice": false,
+        "sensor_switch": false
+      },
+      "times": {
+        "alarm_1": "07:30",
+        "alarm_2": "08:15",
+        "power_on": "07:00",
+        "power_off": "23:30"
+      }
+    }
+  },
+  "status_invalid": [
+    { "reason": "short", "frame": "R000-G255-B255S11CSS" },
+    { "reason": "no terminator", "frame": "R000-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CXYZ" },
+    { "reason": "bad color", "frame": "R999-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CCSS" },
+    { "reason": "bad time", "frame": "R000-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A25:30AA08:15BT07:00OT23:30CCSS" }
+  ]
+}

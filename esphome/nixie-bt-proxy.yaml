@@ -1,0 +1,44 @@
+# ESPHome Bluetooth proxy for the nixie clock: an ESP32 within a few metres of the clock gives
+# Home Assistant a Bluetooth radio there. `active: true` is what matters: a passive proxy only
+# relays advertisements, while the clock must be connected to (GATT) to be read or controlled.
+#
+# Flash: copy secrets.example.yaml to secrets.yaml, fill it, then
+#   esphome run esphome/nixie-bt-proxy.yaml
+# Home Assistant discovers the proxy (ESPHome integration); the Guoran integration then reaches
+# the clock through it with no further configuration.
+
+esphome:
+  name: nixie-bt-proxy
+  friendly_name: Nixie Bluetooth proxy
+
+esp32:
+  board: esp32dev
+  framework:
+    # ESP-IDF, not Arduino: it leaves enough memory for Wi-Fi and BLE connections together.
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+esp32_ble_tracker:
+  scan_parameters:
+    # Active scanning also reads scan responses, where modules like the clock's often put their
+    # name (XGGF…), which the integration's discovery matches on. The interval and window are
+    # ESPHome's recommended values for proxies sharing the radio with Wi-Fi.
+    active: true
+    interval: 1100ms
+    window: 1100ms
+
+bluetooth_proxy:
+  active: true

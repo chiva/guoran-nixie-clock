@@ -1,0 +1,39 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff (lint + autofix)
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: mypy
+        name: mypy (strict)
+        entry: uv run mypy
+        language: system
+        pass_filenames: false
+        types_or: [python, pyi]
+      - id: web-tests
+        name: web app tests
+        entry: npm --prefix web test --silent
+        language: system
+        pass_filenames: false
+        files: ^(web/|docs/fixtures/)
+      - id: translations
+        name: translations/en.json matches strings.json
+        entry: diff custom_components/guoran_nixie/strings.json custom_components/guoran_nixie/translations/en.json
+        language: system
+        pass_filenames: false
+        files: ^custom_components/guoran_nixie/(strings\.json|translations/)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b # v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-json

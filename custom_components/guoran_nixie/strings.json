@@ -1,0 +1,109 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Guoran nixie clock",
+        "description": "Pick the clock. The password is the Bluetooth module's 6-digit password: 210709 if you used the original app with it (the app sets that one), or 000000 for a clock that never met the app (it will be changed to the one you enter).",
+        "data": {
+          "address": "Clock",
+          "password": "Password"
+        }
+      },
+      "bluetooth_confirm": {
+        "title": "Set up {name}",
+        "description": "The password is the Bluetooth module's 6-digit password: 210709 if you used the original app with this clock, or 000000 if it never met the app (it will be changed to the one you enter). Close the phone app first: the clock accepts one connection at a time.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "New password for {name}",
+        "description": "The clock refused the stored password. Enter its current 6-digit password.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the clock or read its status. Close the phone app (the clock accepts one connection at a time) and check that a Bluetooth adapter or proxy is in range.",
+      "invalid_auth": "The clock refused the password.",
+      "invalid_password": "The password must be exactly 6 digits."
+    },
+    "abort": {
+      "already_configured": "This clock is already set up.",
+      "no_devices_found": "No Guoran clock (Bluetooth name XGGF…) is in range of any adapter or proxy.",
+      "reauth_successful": "Password updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Guoran nixie clock options",
+        "data": {
+          "scan_interval": "Status refresh interval",
+          "sync_time": "Keep the clock's time in sync"
+        },
+        "data_description": {
+          "scan_interval": "Each refresh connects to the clock for a moment; while connected, the phone app cannot.",
+          "sync_time": "Set the clock to Home Assistant's time on the first refresh and then every hour."
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "key_previous": { "name": "Backlight previous colour" },
+      "key_mode": { "name": "Backlight mode" },
+      "key_next": { "name": "Backlight next colour" },
+      "key_power": { "name": "Power" },
+      "key_back": { "name": "Back" },
+      "key_plus": { "name": "Plus" },
+      "key_set": { "name": "Set" },
+      "key_ok": { "name": "OK" },
+      "key_minus": { "name": "Minus" },
+      "sync_time": { "name": "Sync time now" }
+    },
+    "light": {
+      "backlight": { "name": "Backlight" }
+    },
+    "switch": {
+      "tube_1": { "name": "Tube 1 backlight" },
+      "tube_2": { "name": "Tube 2 backlight" },
+      "tube_3": { "name": "Tube 3 backlight" },
+      "tube_4": { "name": "Tube 4 backlight" },
+      "tube_5": { "name": "Tube 5 backlight" },
+      "tube_6": { "name": "Tube 6 backlight" },
+      "time_sync": { "name": "Phone time sync" },
+      "alarm_1": { "name": "Alarm 1" },
+      "alarm_2": { "name": "Alarm 2" },
+      "schedule": { "name": "Scheduled power on/off" },
+      "auto_brightness": { "name": "Auto brightness" },
+      "hour_12": { "name": "12-hour format" },
+      "ambient_light": { "name": "Ambient light sensing" },
+      "hourly_chime": { "name": "Hourly voice chime" },
+      "english_voice": { "name": "English voice" },
+      "sensor_switch": { "name": "Sensor switch" }
+    },
+    "time": {
+      "alarm_1_time": { "name": "Alarm 1 time" },
+      "alarm_2_time": { "name": "Alarm 2 time" },
+      "power_on_time": { "name": "Power-on time" },
+      "power_off_time": { "name": "Power-off time" }
+    }
+  },
+  "exceptions": {
+    "not_found": {
+      "message": "No Bluetooth adapter or proxy can see the clock {address}."
+    },
+    "cannot_connect": {
+      "message": "Could not talk to the clock: {detail}"
+    },
+    "invalid_auth": {
+      "message": "The clock refused the password: {detail}"
+    },
+    "bad_status": {
+      "message": "The clock sent an unreadable status: {detail}"
+    }
+  }
+}

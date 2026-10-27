@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#16110d">
+  <meta name="description" content="Control a Guoran (果然) Bluetooth nixie tube clock from Chrome: colour, alarms, schedule and settings.">
+  <title>Guoran Nixie</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="36" height="36">
+      <div>
+        <h1>Guoran Nixie</h1>
+        <p id="device-line" class="muted">Not connected</p>
+      </div>
+    </div>
+    <button id="connect" class="primary" type="button">Connect</button>
+  </header>
+
+  <p id="unsupported" class="notice" hidden>
+    This browser has no Web Bluetooth. Open this page in Chrome (or Edge) on Android, Windows,
+    macOS, Linux or ChromeOS. iOS browsers cannot talk to Bluetooth devices from a web page.
+  </p>
+
+  <details class="card settings">
+    <summary>Connection settings</summary>
+    <label class="field">
+      <span>Bluetooth password</span>
+      <input id="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required>
+    </label>
+    <p class="muted small">
+      210709 if the clock was used with the original app. A clock that never met it still has
+      000000 and is switched to this password on first connection.
+    </p>
+    <button id="forget" type="button" class="ghost">Choose another clock</button>
+  </details>
+
+  <fieldset id="controls" disabled>
+    <legend class="visually-hidden">Clock controls</legend>
+
+    <section class="card">
+      <h2>Backlight</h2>
+      <div class="color-row">
+        <span id="swatch" class="swatch" aria-hidden="true"></span>
+        <input id="hue" class="hue" type="range" min="0" max="1530" step="1" value="765" aria-label="Backlight colour">
+        <button id="backlight-off" type="button" class="ghost">Off</button>
+      </div>
+      <div class="keys three" data-keys="previous mode next"></div>
+      <h3>Tube backlights</h3>
+      <div id="tubes" class="tubes"></div>
+    </section>
+
+    <section class="card">
+      <h2>Front-panel buttons</h2>
+      <div class="keys" data-keys="power back plus set ok minus"></div>
+    </section>
+
+    <section class="card">
+      <h2>Clock time</h2>
+      <div class="row">
+        <span>Phone time</span>
+        <output id="phone-time" class="digits">--:--:--</output>
+      </div>
+      <button id="sync-now" type="button">Set the clock to this time</button>
+      <div data-switches="time_sync"></div>
+      <p class="muted small">While phone time sync is on and this page is open, the time is sent every minute.</p>
+    </section>
+
+    <section class="card">
+      <h2>Alarms</h2>
+      <div class="timed" data-time="alarm_1" data-switch="alarm_1"></div>
+      <div class="timed" data-time="alarm_2" data-switch="alarm_2"></div>
+    </section>
+
+    <section class="card">
+      <h2>Scheduled power</h2>
+      <div class="timed" data-time="power_on"></div>
+      <div class="timed" data-time="power_off"></div>
+      <div data-switches="schedule"></div>
+    </section>
+
+    <section class="card">
+      <h2>Other settings</h2>
+      <div data-switches="auto_brightness hour_12 ambient_light hourly_chime english_voice sensor_switch"></div>
+    </section>
+
+    <div class="footer-row">
+      <button id="refresh" type="button" class="ghost">Read clock settings</button>
+      <span id="updated" class="muted small"></span>
+    </div>
+  </fieldset>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

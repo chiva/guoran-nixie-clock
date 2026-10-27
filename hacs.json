@@ -1,0 +1,7 @@
+{
+  "name": "Guoran Nixie Clock",
+  "render_readme": true,
+  "zip_release": true,
+  "filename": "guoran_nixie.zip",
+  "homeassistant": "2026.9.0"
+}

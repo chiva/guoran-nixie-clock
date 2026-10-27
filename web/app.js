@@ -1,0 +1,307 @@
+// The page: builds the controls, turns user input into commands, and renders status frames.
+
+import { Clock, ClockAuthError } from './ble.js';
+import {
+  BLACK,
+  DEFAULT_PASSWORD,
+  encodeColor,
+  encodeKey,
+  encodeTime,
+  encodeTimeSync,
+  encodeToggle,
+  hueToRgb,
+  rgbToCss,
+  rgbToHue,
+  validatePassword,
+} from './protocol.js';
+
+const PASSWORD_STORAGE_KEY = 'guoran-nixie.password';
+const TIME_SYNC_INTERVAL_MS = 60_000;
+const REFRESH_DELAY_MS = 800;
+const TOAST_MS = 4000;
+
+const TOGGLE_LABELS = {
+  time_sync: 'Phone time sync',
+  alarm_1: 'Alarm 1',
+  alarm_2: 'Alarm 2',
+  schedule: 'Scheduled power on/off',
+  auto_brightness: 'Auto brightness',
+  hour_12: '12-hour format',
+  ambient_light: 'Ambient light sensing',
+  hourly_chime: 'Hourly voice chime',
+  english_voice: 'English voice',
+  sensor_switch: 'Sensor switch',
+};
+const TUBES = ['tube_1', 'tube_2', 'tube_3', 'tube_4', 'tube_5', 'tube_6'];
+const KEY_LABELS = {
+  previous: ['‹', 'Previous backlight colour'],
+  mode: ['M', 'Backlight mode'],
+  next: ['›', 'Next backlight colour'],
+  power: ['⏻', 'Power'],
+  back: ['↩', 'Back'],
+  plus: ['+', 'Plus'],
+  set: ['SET', 'Set'],
+  ok: ['OK', 'OK'],
+  minus: ['−', 'Minus'],
+};
+const TIME_LABELS = {
+  alarm_1: 'Alarm 1',
+  alarm_2: 'Alarm 2',
+  power_on: 'Power on at',
+  power_off: 'Power off at',
+};
+
+const clock = new Clock();
+const $ = (selector) => document.querySelector(selector);
+const pad = (value) => String(value).padStart(2, '0');
+
+let status = null;
+let refreshTimer = null;
+let toastTimer = null;
+let pendingColor = null;
+let colorInFlight = false;
+let disconnectRequested = false;
+
+const storage = {
+  get(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Private mode or blocked storage: the password just is not remembered.
+    }
+  },
+};
+
+function element(tag, props = {}, children = []) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+
+function switchRow(toggle) {
+  const input = element('input', { type: 'checkbox', role: 'switch' });
+  input.dataset.toggle = toggle;
+  return element('label', { className: 'switch' }, [element('span', { textContent: TOGGLE_LABELS[toggle] }), input]);
+}
+
+function buildControls() {
+  for (const container of document.querySelectorAll('[data-switches]')) {
+    container.append(...container.dataset.switches.split(' ').map(switchRow));
+  }
+  for (const container of document.querySelectorAll('[data-keys]')) {
+    for (const key of container.dataset.keys.split(' ')) {
+      const [glyph, label] = KEY_LABELS[key];
+      const button = element('button', { type: 'button', textContent: glyph, title: label });
+      button.setAttribute('aria-label', label);
+      button.dataset.key = key;
+      container.append(button);
+    }
+  }
+  $('#tubes').append(
+    ...TUBES.map((toggle, index) => {
+      const input = element('input', { type: 'checkbox' });
+      input.dataset.toggle = toggle;
+      input.setAttribute('aria-label', `Tube ${index + 1} backlight`);
+      return element('label', { className: 'tube' }, [input, element('span', { textContent: String(index + 1) })]);
+    }),
+  );
+  for (const container of document.querySelectorAll('[data-time]')) {
+    const setting = container.dataset.time;
+    const input = element('input', { type: 'time', step: 60, value: '00:00' });
+    input.dataset.setting = setting;
+    container.append(element('label', { className: 'row' }, [element('span', { textContent: TIME_LABELS[setting] }), input]));
+    if (container.dataset.switch) container.append(switchRow(container.dataset.switch));
+  }
+}
+
+function toast(message, { error = false } = {}) {
+  const node = $('#toast');
+  node.textContent = message;
+  node.classList.toggle('error', error);
+  node.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (node.hidden = true), TOAST_MS);
+}
+
+/** Run a clock operation, reporting failures instead of throwing them at an event handler. */
+async function run(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    console.error(error);
+    toast(error.message, { error: true });
+    return undefined;
+  }
+}
+
+function renderConnection() {
+  const connected = clock.connected;
+  $('#controls').disabled = !connected;
+  $('#connect').textContent = connected ? 'Disconnect' : 'Connect';
+  $('#device-line').textContent = connected ? `Connected to ${clock.name}` : clock.name ? `${clock.name} · disconnected` : 'Not connected';
+}
+
+function renderColor(rgb) {
+  const swatch = $('#swatch');
+  const off = rgb.every((channel) => channel === 0);
+  swatch.classList.toggle('off', off);
+  if (!off) swatch.style.setProperty('--swatch', rgbToCss(rgb));
+  const position = rgbToHue(rgb);
+  if (position !== null) $('#hue').value = String(position);
+}
+
+function render(next) {
+  status = next;
+  renderColor(next.rgb);
+  for (const input of document.querySelectorAll('[data-toggle]')) input.checked = next.toggles[input.dataset.toggle];
+  for (const input of document.querySelectorAll('[data-setting]')) {
+    if (document.activeElement !== input) input.value = next.times[input.dataset.setting];
+  }
+  $('#updated').textContent = `Read at ${new Date().toLocaleTimeString()}`;
+}
+
+/** Read the settings back shortly after a change, to show what the clock actually kept. */
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => run(() => clock.requestStatus()), REFRESH_DELAY_MS);
+}
+
+async function command(text) {
+  await run(() => clock.send(text));
+  scheduleRefresh();
+}
+
+/** Slider drags fire many events: send the latest colour only, one write at a time. */
+async function sendColor(rgb) {
+  pendingColor = rgb;
+  if (colorInFlight) return;
+  colorInFlight = true;
+  try {
+    while (pendingColor) {
+      const next = pendingColor;
+      pendingColor = null;
+      await run(() => clock.send(encodeColor(next)));
+    }
+  } finally {
+    colorInFlight = false;
+  }
+  scheduleRefresh();
+}
+
+function currentPassword() {
+  const value = $('#password').value.trim();
+  validatePassword(value);
+  return value;
+}
+
+async function toggleConnection() {
+  if (clock.connected) {
+    disconnectRequested = true;
+    clock.disconnect();
+    return;
+  }
+  let password;
+  try {
+    password = currentPassword();
+  } catch (error) {
+    $('.settings').open = true;
+    toast(error.message, { error: true });
+    return;
+  }
+  storage.set(PASSWORD_STORAGE_KEY, password);
+  $('#connect').disabled = true;
+  $('#device-line').textContent = 'Connecting…';
+  try {
+    await clock.connect(password);
+    renderConnection();
+    await clock.requestStatus();
+    toast(`Connected to ${clock.name}`);
+  } catch (error) {
+    if (error.name === 'NotFoundError') {
+      toast('No clock chosen. Close the original app or any other phone connected to the clock.');
+    } else {
+      if (error instanceof ClockAuthError) $('.settings').open = true;
+      toast(error.message, { error: true });
+    }
+  } finally {
+    $('#connect').disabled = false;
+    renderConnection();
+  }
+}
+
+function syncTimeIfEnabled() {
+  if (clock.connected && status?.toggles.time_sync) run(() => clock.send(encodeTimeSync(new Date())));
+}
+
+function tickPhoneClock() {
+  const now = new Date();
+  $('#phone-time').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
+function wireEvents() {
+  $('#connect').addEventListener('click', toggleConnection);
+  $('#forget').addEventListener('click', () => {
+    clock.forget();
+    renderConnection();
+  });
+  $('#refresh').addEventListener('click', () => run(() => clock.requestStatus()));
+  $('#sync-now').addEventListener('click', async () => {
+    await run(() => clock.send(encodeTimeSync(new Date())));
+    toast('Clock time set');
+  });
+  $('#backlight-off').addEventListener('click', () => {
+    renderColor(BLACK);
+    sendColor(BLACK);
+  });
+  $('#hue').addEventListener('input', (event) => {
+    const rgb = hueToRgb(Number(event.target.value));
+    renderColor(rgb);
+    sendColor(rgb);
+  });
+  $('#controls').addEventListener('click', (event) => {
+    const key = event.target.closest('[data-key]')?.dataset.key;
+    if (key) command(encodeKey(key));
+  });
+  $('#controls').addEventListener('change', (event) => {
+    const { toggle, setting } = event.target.dataset;
+    if (toggle) {
+      command(encodeToggle(toggle, event.target.checked));
+      if (toggle === 'time_sync' && event.target.checked) run(() => clock.send(encodeTimeSync(new Date())));
+    } else if (setting && event.target.value) {
+      const [hour, minute] = event.target.value.split(':').map(Number);
+      command(encodeTime(setting, hour, minute));
+    }
+  });
+  clock.addEventListener('status', (event) => render(event.detail));
+  clock.addEventListener('disconnected', () => {
+    renderConnection();
+    if (!disconnectRequested) toast('The clock disconnected');
+    disconnectRequested = false;
+  });
+}
+
+function start() {
+  buildControls();
+  $('#password').value = storage.get(PASSWORD_STORAGE_KEY) ?? DEFAULT_PASSWORD;
+  if (!Clock.supported) {
+    $('#unsupported').hidden = false;
+    $('#connect').disabled = true;
+  }
+  wireEvents();
+  renderConnection();
+  tickPhoneClock();
+  setInterval(tickPhoneClock, 1000);
+  setInterval(syncTimeIfEnabled, TIME_SYNC_INTERVAL_MS);
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch((error) => console.warn('No offline support:', error));
+  }
+}
+
+start();
