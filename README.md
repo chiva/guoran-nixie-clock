@@ -20,10 +20,10 @@ The original app is not included here; the vendor still hosts it at
 
 The APK is a 2019-era DCloud HTML5+ wrapper. It targets Android API 26, and its closed-source
 Bluetooth runtime predates the Android 12 permission model (`BLUETOOTH_SCAN` and
-`BLUETOOTH_CONNECT`, which the manifest does not declare). It also scans with a service-UUID
-filter. Recent Android versions apply that filter in the Bluetooth controller, so the clock is
-found only if it advertises those UUIDs. Which of these breaks a given phone has not been tested on
-hardware. The app also asks for contacts, microphone and phone-state permissions it never uses.
+`BLUETOOTH_CONNECT`, which the manifest does not declare), which makes it the likely culprit.
+Its scan filter (`FFF0`, `FFB0`) is not: the clock advertises exactly those services. The exact
+failure on a recent phone has not been captured. The app also asks for contacts, microphone and
+phone-state permissions it never uses.
 Repackaging it would not fix the runtime, so it is replaced instead. The vendor's own manual
 admits it: *"If the clock cannot be found, it may be the compatibility problem between mobile
 phone and software, please change the mobile phone"*. The vendor's WeChat mini program 果然时钟
@@ -120,4 +120,5 @@ protocol starts there.
 `uv run pre-commit install` runs the same checks on each commit. Changes go through pull requests
 with a Conventional Commit title; CI must pass before merging. release-please collects merged
 changes into a release PR, and merging that publishes the release: the HACS zip and the web app
-on GitHub Pages.
+on GitHub Pages. GitHub does not start CI on PRs opened by Actions, so close and reopen the release
+PR to run its checks, then approve it (the code owner's review is required) and merge.

@@ -15,4 +15,9 @@
 - Releases are release-please's: merging its release PR tags the version (manifest.json,
   web/package.json, the service worker cache), attaches `guoran_nixie.zip` for HACS and publishes
   the web app to GitHub Pages. `feat:` bumps the minor version, `fix:` the patch.
+- release-please opens its PRs with `GITHUB_TOKEN`, so CI does not start on them and they are
+  not the maintainer's: close and reopen the release PR to run the required checks, and it needs
+  the code owner's approval before it can merge.
+- Hardware facts go in `docs/PROTOCOL.md` marked **observed** (with model, name and date), or
+  stay **inferred**/**unverified** until a test on a clock settles them.
 - Only push or open PRs when the maintainer asks.
