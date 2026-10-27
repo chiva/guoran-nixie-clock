@@ -14,7 +14,16 @@ export const UART_TX_CHAR = uuid16(0xffe9);
 export const AUTH_SERVICE = uuid16(0xffc0);
 export const AUTH_WRITE_CHAR = uuid16(0xffc1);
 export const AUTH_NOTIFY_CHAR = uuid16(0xffc2);
-export const OPTIONAL_SERVICES = Object.freeze([UART_RX_SERVICE, UART_TX_SERVICE, AUTH_SERVICE]);
+/** Without these there is no session; the password service is optional. */
+export const REQUIRED_SERVICES = Object.freeze([UART_RX_SERVICE, UART_TX_SERVICE]);
+/** Also on an IN1204M (2023, "XGGF-IN1204231115.1"): FFF0 (module GPIO), FF90 and FD00 (unknown).
+ * Unused, but declared so a failed connection can report everything the clock offered. */
+const OBSERVED_SERVICES = Object.freeze([uuid16(0xfff0), uuid16(0xff90), uuid16(0xfd00)]);
+export const OPTIONAL_SERVICES = Object.freeze([...REQUIRED_SERVICES, AUTH_SERVICE, ...OBSERVED_SERVICES]);
+
+/** "0000ffe0-0000-1000-8000-00805f9b34fb" → "FFE0"; other UUIDs unchanged. */
+export const shortUuid = (uuid) =>
+  /^0000([0-9a-f]{4})-0000-1000-8000-00805f9b34fb$/i.exec(uuid)?.[1].toUpperCase() ?? uuid;
 
 /** The original app changes the Bluetooth module's password to this on first connection. */
 export const DEFAULT_PASSWORD = '210709';

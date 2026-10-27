@@ -19,7 +19,9 @@ to the clock microcontroller's serial port, and adds an optional "anti-hijack" p
 
 | Item | Value |
 |---|---|
-| Advertised name | starts with `XGGF` (the app shows nothing else); the manual shows `XGGF-VFD11-4EC305` |
+| Advertised name | starts with `XGGF` (the app shows nothing else): `XGGF-VFD11-4EC305` in the manual, `XGGF-IN1204231115.1` on a 2023 IN1204M |
+| Advertised services | `FFF0`, `FFB0` (incomplete list of 16-bit UUIDs, **observed**) |
+| Manufacturer data | company `0x5352` (bytes `52 53`, "RS"), then `20 22`, the module's MAC (`BA03574B51C1`) and `05 05 00 01 01 01` (**observed**, meaning unknown) |
 | Encoding | plain ASCII in both directions |
 | Framing | **none**: the module streams bytes to the clock's UART |
 
@@ -34,6 +36,21 @@ All UUIDs are 16-bit, on the Bluetooth base UUID `0000xxxx-0000-1000-8000-00805f
 | `FFC0` | `FFC1` | write | password |
 | `FFC0` | `FFC2` | notify | password result (one byte) |
 | `FFF0` | `FFF1`–`FFF3` | | module GPIO; unused by the app |
+| `FF90`, `FD00` | | | present on the 2023 IN1204M, unused by any app (**observed**) |
+| `180A` | `2A23`, `2A26`, `2A27`, `2A29` | read | Device Information (system ID, firmware, hardware, manufacturer) |
+
+The table is confirmed on a 2023 IN1204M with `chrome://bluetooth-internals`. Chrome on the laptop
+listed the clock under two addresses, `BA:03:57:4B:51:C1` (the one in its advertisement) and
+`B8:8E:23:74:58:AA`. The services above were read from the second.
+
+### Service discovery is slow
+
+The module publishes its services some time after the connection is made. An Android phone
+asking straight away saw `FFF0`, `FF90` and `FFE5` but not `FFE0` ("No Services matching UUID
+0000ffe0… found"). The original app polled the service list every 500 ms, up to 20 times, before
+giving up, and an older version of it waited 3 s. The web app polls every 500 ms for up to 5 s,
+reconnects once, and then reports the services it did see. Bleak, which Home Assistant uses,
+completes discovery as part of connecting.
 
 The original app scanned with a service filter `["ffb0", "fff0"]` and then filtered on the name
 prefix. The rewritten apps filter by name only.

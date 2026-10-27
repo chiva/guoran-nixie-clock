@@ -3,11 +3,21 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
 import { Clock, ClockAuthError, ClockConnectionError } from '../ble.js';
-import { FACTORY_PASSWORD, NAME_PREFIX, STATUS_REQUEST, StatusFrameError, UART_TX_CHAR, encodeTime, encodeTimeSync } from '../protocol.js';
+import {
+  FACTORY_PASSWORD,
+  NAME_PREFIX,
+  OPTIONAL_SERVICES,
+  STATUS_REQUEST,
+  StatusFrameError,
+  UART_TX_CHAR,
+  encodeTime,
+  encodeTimeSync,
+  shortUuid,
+} from '../protocol.js';
 import { FakeClock } from './fake-bluetooth.mjs';
 
 const PASSWORD = '210709';
-const FAST = { authTimeoutMs: 30, statusTimeoutMs: 30, commandGapMs: 0 };
+const FAST = { authTimeoutMs: 30, statusTimeoutMs: 30, commandGapMs: 0, discoveryPollMs: 1, discoveryPolls: 10 };
 
 let fake;
 let clock;
@@ -25,7 +35,8 @@ describe('connect', () => {
     assert.equal(Clock.supported, true);
     await clock.connect(PASSWORD);
     assert.deepEqual(fake.lastRequest.filters, [{ namePrefix: NAME_PREFIX }]);
-    assert.equal(fake.lastRequest.optionalServices.length, 3);
+    assert.deepEqual(fake.lastRequest.optionalServices.map(shortUuid), ['FFE0', 'FFE5', 'FFC0', 'FFF0', 'FF90', 'FD00']);
+    assert.deepEqual(fake.lastRequest.optionalServices, OPTIONAL_SERVICES);
     assert.equal(clock.connected, true);
     assert.equal(clock.name, 'XGGF-1234');
     assert.deepEqual(fake.authWrites, [PASSWORD + PASSWORD]);
@@ -48,6 +59,39 @@ describe('connect', () => {
   it('skips the login on a module without a password service', async () => {
     fake.hasAuthService = false;
     await clock.connect(PASSWORD);
+    assert.deepEqual(fake.authWrites, []);
+  });
+
+  it('waits for the clock to finish service discovery, and still logs in', async () => {
+    // The real module first lists FFF0, FF90 and FFE5 only: "No Services matching UUID FFE0".
+    fake.discoveryLagPolls = 4;
+    await clock.connect(PASSWORD);
+    assert.equal(clock.connected, true);
+    assert.equal(fake.connections, 1);
+    assert.equal(fake.discoveryPolls, 5);
+    assert.deepEqual(fake.authWrites, [PASSWORD + PASSWORD], 'a late password service is not skipped');
+  });
+
+  it('reconnects once when discovery never completes on the first connection', async () => {
+    fake.brokenDiscoveryConnections = 1;
+    await clock.connect(PASSWORD);
+    assert.equal(clock.connected, true);
+    assert.equal(fake.connections, 2);
+    assert.equal(fake.discoveryPolls, FAST.discoveryPolls + 1);
+  });
+
+  it('reports what the clock offered when the services never appear', async () => {
+    fake.brokenDiscoveryConnections = 2;
+    await assert.rejects(
+      clock.connect(PASSWORD),
+      (error) => {
+        assert.ok(error instanceof ClockConnectionError);
+        assert.match(error.message, /did not offer services FFE0 and FFE5 \(offered: FFF0, FF90, FFE5\)/);
+        return true;
+      },
+    );
+    assert.equal(fake.connections, 2);
+    assert.equal(fake.gatt.connected, false);
     assert.deepEqual(fake.authWrites, []);
   });
 

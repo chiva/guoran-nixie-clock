@@ -9,6 +9,7 @@ import {
   FACTORY_PASSWORD,
   NAME_PREFIX,
   OPTIONAL_SERVICES,
+  REQUIRED_SERVICES,
   STATUS_REQUEST,
   StatusAssembler,
   StatusFrameError,
@@ -20,15 +21,22 @@ import {
   encodeAuth,
   parseAuthResult,
   parseStatus,
+  shortUuid,
 } from './protocol.js';
 
 const STATUS_ATTEMPTS = 2;
+/** A connection whose services are still missing after polling is dropped and opened once more. */
+const CONNECTION_ATTEMPTS = 2;
 export const DEFAULT_TIMING = Object.freeze({
   authTimeoutMs: 5000,
   statusTimeoutMs: 5000,
   /** The module forwards bytes to the clock's serial port without delimiters: commands sent
    * back to back could merge into one the clock cannot parse. */
   commandGapMs: 150,
+  /** The module finishes service discovery late: the original app asked every 500 ms until the
+   * services appeared (and an older version waited 3 s), so this does the same, up to 5 s. */
+  discoveryPollMs: 500,
+  discoveryPolls: 10,
 });
 
 export class ClockConnectionError extends Error {
@@ -101,19 +109,42 @@ export class Clock extends EventTarget {
       this.#device.addEventListener('gattserverdisconnected', () => this.#onDisconnected());
     }
     try {
-      const server = await this.#device.gatt.connect();
-      await this.#authenticate(server, password);
-      const rx = await (await server.getPrimaryService(UART_RX_SERVICE)).getCharacteristic(UART_RX_CHAR);
+      const services = await this.#connectWithServices();
+      await this.#authenticate(services.get(AUTH_SERVICE), password);
+      const rx = await services.get(UART_RX_SERVICE).getCharacteristic(UART_RX_CHAR);
       rx.addEventListener('characteristicvaluechanged', (event) => {
         this.#onUart(new Uint8Array(event.target.value.buffer));
       });
       await rx.startNotifications();
-      this.#tx = await (await server.getPrimaryService(UART_TX_SERVICE)).getCharacteristic(UART_TX_CHAR);
+      this.#tx = await services.get(UART_TX_SERVICE).getCharacteristic(UART_TX_CHAR);
     } catch (error) {
       this.#device.gatt.disconnect();
       if (error instanceof ClockAuthError || error instanceof ClockConnectionError) throw error;
       throw new ClockConnectionError(`connecting to ${this.name}: ${error.message}`);
     }
+  }
+
+  /** Connect and wait for service discovery to include the UART services; reconnect once if it
+   * never does. Resolves with the services by UUID. */
+  async #connectWithServices() {
+    let offered = [];
+    for (let connection = 1; connection <= CONNECTION_ATTEMPTS; connection += 1) {
+      const server = await this.#device.gatt.connect();
+      for (let poll = 1; poll <= this.#timing.discoveryPolls; poll += 1) {
+        const services = new Map((await server.getPrimaryServices().catch(() => [])).map((s) => [s.uuid, s]));
+        if (REQUIRED_SERVICES.every((uuid) => services.has(uuid))) return services;
+        offered = [...services.keys()];
+        if (!this.#device.gatt.connected) break;
+        await sleep(this.#timing.discoveryPollMs);
+      }
+      this.#device.gatt.disconnect();
+    }
+    const found = offered.length ? offered.map(shortUuid).join(', ') : 'none';
+    const needed = REQUIRED_SERVICES.map(shortUuid).join(' and ');
+    throw new ClockConnectionError(
+      `${this.name} did not offer services ${needed} (offered: ${found}). ` +
+        'Close any other app connected to the clock, unplug it for 10 s and try again.',
+    );
   }
 
   disconnect() {
@@ -154,15 +185,11 @@ export class Clock extends EventTarget {
     throw lastError;
   }
 
-  /** Log in to the module's anti-hijack service, when it has one. The configured password
-   * first; if refused, the module may still have its factory password, so change that. */
-  async #authenticate(server, password) {
-    let service;
-    try {
-      service = await server.getPrimaryService(AUTH_SERVICE);
-    } catch {
-      return; // no password service on this module
-    }
+  /** Log in to the module's anti-hijack service, when it has one (`service` from the settled
+   * discovery, so a late discovery cannot pass for a module without a password). The configured
+   * password first; if refused, the module may still have its factory password, so change that. */
+  async #authenticate(service, password) {
+    if (!service) return;
     const write = await service.getCharacteristic(AUTH_WRITE_CHAR);
     const notify = await service.getCharacteristic(AUTH_NOTIFY_CHAR);
     await notify.startNotifications();
