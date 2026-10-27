@@ -1,7 +1,7 @@
 // Offline app shell: the page works without a network once opened (Bluetooth needs none).
 // The cache is named after the release (release-please updates it), so each release starts clean.
 
-const CACHE = 'guoran-nixie-0.1.0'; // x-release-please-version
+const CACHE = 'guoran-nixie-0.1.1'; // x-release-please-version
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'ble.js', 'protocol.js', 'icon.svg', 'manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
