@@ -23,6 +23,20 @@ import {
   encodeToggle,
 } from '../protocol.js';
 
+const uuid16 = (short) => `0000${short.toString(16).padStart(4, '0')}-0000-1000-8000-00805f9b34fb`;
+/** The services of a real IN1204M (chrome://bluetooth-internals), in the order it lists them. */
+const DISCOVERY_ORDER = [
+  uuid16(0xfff0),
+  uuid16(0xff90),
+  UART_TX_SERVICE,
+  uuid16(0xfd00),
+  UART_RX_SERVICE,
+  AUTH_SERVICE,
+  uuid16(0x180a),
+];
+/** While discovery lags, FFF0, FF90 and FFE5 are known but not FFE0: the error seen on a phone. */
+const LAGGING_DISCOVERY = 3;
+
 const COMMAND = /^(R\d{3}-G\d{3}-B\d{3}|S[0-9A-F][01]|K0[1-9]|[AT]\d{2}:\d{2}[ABOC]|\$\d{4}-\d{2}-\d{2};\d{2}:\d{2}:\d{2};0[0-6]|OSC)/;
 
 class FakeCharacteristic extends EventTarget {
@@ -64,6 +78,13 @@ export class FakeClock extends EventTarget {
   connections = 0;
   chooserShown = 0;
   subscribed = new Set();
+  /** Service lists that miss the UART services at the start of each connection, as the real
+   * module's slow discovery did. */
+  discoveryLagPolls = 0;
+  /** Connections, from the first, whose discovery never completes. */
+  brokenDiscoveryConnections = 0;
+  discoveryPolls = 0;
+  #polls = 0;
   #uart = '';
 
   constructor() {
@@ -74,11 +95,6 @@ export class FakeClock extends EventTarget {
       [AUTH_WRITE_CHAR]: new FakeCharacteristic(this, AUTH_WRITE_CHAR, { write: true }),
       [AUTH_NOTIFY_CHAR]: new FakeCharacteristic(this, AUTH_NOTIFY_CHAR, { notify: true }),
     };
-    const services = {
-      [UART_TX_SERVICE]: [UART_TX_CHAR],
-      [UART_RX_SERVICE]: [UART_RX_CHAR],
-      [AUTH_SERVICE]: [AUTH_WRITE_CHAR, AUTH_NOTIFY_CHAR],
-    };
     const clock = this;
     this.gatt = {
       connected: false,
@@ -86,6 +102,7 @@ export class FakeClock extends EventTarget {
         clock.connections += 1;
         clock.gatt.connected = true;
         clock.#uart = '';
+        clock.#polls = 0;
         return clock.gatt;
       },
       disconnect() {
@@ -93,13 +110,22 @@ export class FakeClock extends EventTarget {
         clock.gatt.connected = false;
         clock.dispatchEvent(new Event('gattserverdisconnected'));
       },
-      async getPrimaryService(uuid) {
-        if (!services[uuid] || (uuid === AUTH_SERVICE && !clock.hasAuthService)) {
-          throw new DOMException(`No service ${uuid}`, 'NotFoundError');
-        }
-        return {
+      /** As Chrome: only the services the page declared, in discovery order; NotFoundError if
+       * none. While discovery lags, only the first services the real clock lists are known. */
+      async getPrimaryServices() {
+        clock.discoveryPolls += 1;
+        clock.#polls += 1;
+        const lagging = clock.connections <= clock.brokenDiscoveryConnections || clock.#polls <= clock.discoveryLagPolls;
+        const discovered = lagging ? DISCOVERY_ORDER.slice(0, LAGGING_DISCOVERY) : DISCOVERY_ORDER;
+        const allowed = new Set(clock.lastRequest?.optionalServices ?? []);
+        const visible = discovered.filter(
+          (uuid) => allowed.has(uuid) && (uuid !== AUTH_SERVICE || clock.hasAuthService),
+        );
+        if (!visible.length) throw new DOMException('No Services found in device.', 'NotFoundError');
+        return visible.map((uuid) => ({
+          uuid,
           getCharacteristic: async (charUuid) => clock.characteristics[charUuid],
-        };
+        }));
       },
     };
   }

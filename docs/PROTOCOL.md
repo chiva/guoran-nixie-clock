@@ -19,7 +19,9 @@ to the clock microcontroller's serial port, and adds an optional "anti-hijack" p
 
 | Item | Value |
 |---|---|
-| Advertised name | starts with `XGGF` (the app shows nothing else); the manual shows `XGGF-VFD11-4EC305` |
+| Advertised name | starts with `XGGF` (the app shows nothing else): `XGGF-VFD11-4EC305` in the manual, `XGGF-IN1204231115.1` on a 2023 IN1204M |
+| Advertised services | `FFF0`, `FFB0` (incomplete list of 16-bit UUIDs, **observed**) |
+| Manufacturer data | company `0x5352` (bytes `52 53`, "RS"), then `20 22`, the module's MAC (`BA03574B51C1`) and `05 05 00 01 01 01` (**observed**, meaning unknown) |
 | Encoding | plain ASCII in both directions |
 | Framing | **none**: the module streams bytes to the clock's UART |
 
@@ -34,6 +36,23 @@ All UUIDs are 16-bit, on the Bluetooth base UUID `0000xxxx-0000-1000-8000-00805f
 | `FFC0` | `FFC1` | write | password |
 | `FFC0` | `FFC2` | notify | password result (one byte) |
 | `FFF0` | `FFF1`–`FFF3` | | module GPIO; unused by the app |
+| `FF90`, `FD00` | | | present on the 2023 IN1204M, unused by any app (**observed**) |
+| `180A` | `2A23`, `2A26`, `2A27`, `2A29` | read | Device Information (system ID, firmware, hardware, manufacturer) |
+
+The table is confirmed on a 2023 IN1204M with `chrome://bluetooth-internals`. Chrome on a laptop
+listed that single clock under two addresses: `BA:03:57:4B:51:C1`, the one a phone saw and the
+one inside its advertisement, and `B8:8E:23:74:58:AA`, from which the services above were read
+(**observed**). Home Assistant identifies a clock by its address, so if it changes, the clock is
+discovered again as a new device.
+
+### Service discovery is slow
+
+The module publishes its services some time after the connection is made. An Android phone
+asking straight away saw `FFF0`, `FF90` and `FFE5` but not `FFE0` ("No Services matching UUID
+0000ffe0… found"). The original app polled the service list every 500 ms, up to 20 times, before
+giving up, and an older version of it waited 3 s. The web app polls every 500 ms for up to 5 s,
+reconnects once, and then reports the services it did see. Bleak, which Home Assistant uses,
+completes discovery as part of connecting.
 
 The original app scanned with a service filter `["ffb0", "fff0"]` and then filtered on the name
 prefix. The rewritten apps filter by name only.
@@ -54,6 +73,24 @@ With the default MTU of 23, one write or notification carries 20 bytes. Two mess
 Commands carry no terminator, so the clock must delimit them by format or by serial idle time
 (**inferred**). Both implementations leave at least 150 ms between commands, status requests
 included, so consecutive commands never merge on the UART.
+
+### Finding the services on other modules
+
+The vendor changed Bluetooth modules over time, so the layout above may differ on other clocks.
+The original app never compared full UUIDs: it cut characters 4–8 out of each service and
+characteristic UUID (`uuid.substring(4, 8)`) and compared those to `ffe0`, `ffe5`, `ffc0`,
+`ffe4`, `ffe9` and so on. An older page left in the APK (`index_old.html`) even wrote to the
+first characteristic of the 8th service, whatever it was. Web Bluetooth needs the exact service
+UUID declared up front, so a clock with another layout shows up as "No Services matching UUID".
+
+To read a clock's layout:
+
+- **`chrome://bluetooth-internals`** in desktop Chrome: *Devices*, start a scan, *Inspect* the
+  `XGGF…` entry. It lists every service and characteristic with full UUIDs. This is how the
+  table above was confirmed.
+- **nRF Connect** (Android): tap the clock's row in *Scanner* for its advertisement and *RAW* data;
+  *Connect* opens the services in a new tab next to *Scanner*. The clock accepts one connection
+  at a time, so close every other app first, and unplug it for 10 s if it will not connect.
 
 ## Session
 
@@ -220,6 +257,15 @@ Buffer the notifications. Drop bytes before an `R`. Once 93 bytes from that `R` 
 accept them if they end in `CSS`, otherwise drop the `R` and search again. `R` appears nowhere else
 in a frame, so a lost or corrupted piece costs at most one frame.
 
+## Hardware status
+
+| Date | Clock | Confirmed |
+|---|---|---|
+| 2026-10-27 | IN1204M, `XGGF-IN1204231115.1` | advertisement (`FFF0`, `FFB0`, manufacturer data), the GATT table, slow service discovery |
+
+No command has been tried on a clock yet: everything under *Commands* and *Status frame* still
+comes from the app's code and the manual.
+
 ## Open questions
 
 These can only be settled with the clock itself. The fastest way: enable **Developer options →
@@ -234,3 +280,7 @@ bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the f
 6. Whether `K01`–`K03` are the remote's backlight keys, and whether `K10`+ exist for VOL, LIGHT,
    TIME, DATE and TEMP.
 7. Whether toggles 5 and 6 do anything on the 4-tube models.
+8. Why one clock shows up under two addresses (`BA:03:57:4B:51:C1`, in its advertisement, and
+   `B8:8E:23:74:58:AA`, which exposed the services), whether both connect, and whether either
+   changes after unplugging the clock. To check: in nRF Connect, note the address(es) of
+   `XGGF…`, unplug the clock for 10 s, rescan and compare.
