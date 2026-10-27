@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+*.zip
+.DS_Store
+node_modules/
+.playwright-mcp/
+esphome/secrets.yaml
+esphome/.esphome/
+# The vendor app this project replaces: not ours to redistribute (https://diym.vip/upload/guoran.apk).
+guoran.apk

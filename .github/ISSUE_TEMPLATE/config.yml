@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Protocol and capabilities
+    url: https://github.com/chiva/guoran-nixie-clock/blob/main/docs/PROTOCOL.md
+    about: What the clock understands over Bluetooth, and which details are still unverified.

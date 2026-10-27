@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "initial-version": "0.1.0",
+      "extra-files": [
+        { "type": "json", "path": "custom_components/guoran_nixie/manifest.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "web/package.json", "jsonpath": "$.version" },
+        "web/sw.js"
+      ]
+    }
+  }
+}

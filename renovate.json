@@ -1,0 +1,34 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices", ":semanticCommits"],
+  "enabledManagers": ["pep621", "homeassistant-manifest", "github-actions", "pre-commit"],
+  "minimumReleaseAge": "3 days",
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 4am on monday"] },
+  "packageRules": [
+    {
+      "description": "Test toolchain: pytest-homeassistant-custom-component pins Home Assistant; skip its betas.",
+      "matchPackageNames": ["pytest-homeassistant-custom-component"],
+      "groupName": "home assistant test harness"
+    },
+    {
+      "description": "Copies of the bluetooth and usb integrations' requirements in the pinned Home Assistant: they move with the harness, by hand, never to their own latest release.",
+      "matchPackageNames": [
+        "aiousbwatcher",
+        "serialx",
+        "bleak",
+        "bleak-retry-connector",
+        "bluetooth-adapters",
+        "bluetooth-auto-recovery",
+        "bluetooth-data-tools",
+        "dbus-fast",
+        "habluetooth"
+      ],
+      "enabled": false
+    },
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["!pytest-homeassistant-custom-component"],
+      "groupName": "non-major dependencies"
+    }
+  ]
+}

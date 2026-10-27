@@ -1,0 +1,75 @@
+# Tooling for the Guoran nixie clock Home Assistant integration. This is a HACS custom integration,
+# not a distributable package: its version lives in custom_components/guoran_nixie/manifest.json.
+# It has no runtime requirements of its own: bleak and bleak-retry-connector ship with Home
+# Assistant's bluetooth integration.
+[project]
+name = "guoran-nixie-clock"
+version = "0.0.0"
+requires-python = ">=3.14.2,<3.15"
+dependencies = []
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+
+[dependency-groups]
+test = [
+    # Pins Home Assistant itself (and pytest, bleak, bleak-retry-connector…) to a consistent,
+    # released set.
+    "pytest-homeassistant-custom-component==0.13.367",
+    # The requirements of Home Assistant's bluetooth and usb integrations, which it installs on
+    # demand and the test package does not: copied from their manifests in that release.
+    "aiousbwatcher==1.1.2",
+    "serialx==1.10.0",
+    "bleak==3.0.2",
+    "bleak-retry-connector==4.7.0",
+    "bluetooth-adapters==2.4.0",
+    "bluetooth-auto-recovery==1.6.4",
+    "bluetooth-data-tools==1.29.24",
+    "dbus-fast==5.0.22",
+    "habluetooth==6.26.11",
+]
+lint = ["ruff==0.16.10"]
+typing = ["mypy==2.4.0"]
+dev = [
+    { include-group = "test" },
+    { include-group = "lint" },
+    { include-group = "typing" },
+    "pre-commit==4.6.2",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["custom_components", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "PTH", "RUF", "ASYNC", "SIM"]
+ignore = ["E501", "RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["custom_components"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["custom_components"]
+mypy_path = "."
+explicit_package_bases = true
+# Home Assistant's typing is complete enough for strict mode except for some untyped helpers.
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = ["--tb=short"]
+
+[tool.coverage.run]
+source = ["custom_components/guoran_nixie"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true

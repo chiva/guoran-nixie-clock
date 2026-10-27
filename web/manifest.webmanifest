@@ -1,0 +1,13 @@
+{
+  "name": "Guoran Nixie Clock",
+  "short_name": "Nixie",
+  "description": "Control a Guoran Bluetooth nixie tube clock.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#16110d",
+  "theme_color": "#16110d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
