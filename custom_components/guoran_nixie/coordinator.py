@@ -21,7 +21,17 @@ from .const import (
     DOMAIN,
     TIME_SYNC_INTERVAL,
 )
-from .protocol import ClockStatus, StatusFrameError, encode_time_sync
+from .protocol import (
+    RGB,
+    ClockStatus,
+    Effect,
+    Key,
+    StatusFrameError,
+    effect_after_key,
+    encode_effect,
+    encode_key,
+    encode_time_sync,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +56,9 @@ class GuoranCoordinator(DataUpdateCoordinator[ClockStatus]):
         self.client = client
         self.sync_time: bool = entry.options.get(CONF_SYNC_TIME, DEFAULT_SYNC_TIME)
         self._time_synced_at: datetime | None = None
+        self.effect: Effect | None = None
+        """The backlight effect last set from here; None until then. The status frame has no
+        field for it, and the remote can change it unseen."""
 
     async def _async_update_data(self) -> ClockStatus:
         try:
@@ -82,6 +95,21 @@ class GuoranCoordinator(DataUpdateCoordinator[ClockStatus]):
         await self._run(self.client.async_send(command))
         if expected is not None:
             self.async_set_updated_data(expected)
+
+    async def async_press_key(self, key: Key) -> None:
+        await self._run(self.client.async_send(encode_key(key)))
+        self._set_effect(effect_after_key(self.effect, key))
+
+    async def async_set_effect(self, effect: Effect, rgb: RGB) -> None:
+        """Run `effect` in `rgb`: several commands, which take about a second in all."""
+        await self._run(self.client.async_send(*encode_effect(effect, rgb)))
+        self.effect = effect
+        self.async_set_updated_data(self.data.with_rgb(rgb))
+
+    def _set_effect(self, effect: Effect | None) -> None:
+        if effect is not self.effect:
+            self.effect = effect
+            self.async_update_listeners()
 
     async def async_sync_time(self) -> None:
         await self._run(self._send_time())

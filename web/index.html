@@ -56,7 +56,15 @@
         <input id="hue" class="hue" type="range" min="0" max="1530" step="1" value="765" aria-label="Backlight colour">
         <button id="backlight-off" type="button" class="ghost">Off</button>
       </div>
-      <div class="keys three" data-keys="previous mode next"></div>
+      <label class="row">
+        <span>Effect</span>
+        <select id="effect" aria-label="Backlight effect"><option value="" disabled selected>Unknown</option></select>
+      </label>
+      <p class="muted small">
+        The clock cannot report its effect: this shows the last one set here. Setting one sends
+        the slider's colour again.
+      </p>
+      <div class="keys labelled" data-keys="next mode"></div>
       <h3>Tube backlights</h3>
       <div id="tubes" class="tubes"></div>
     </section>

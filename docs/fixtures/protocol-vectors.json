@@ -42,6 +42,29 @@
     { "key": "ok", "command": "K08" },
     { "key": "minus", "command": "K09" }
   ],
+  "effect": [
+    { "effect": "steady", "rgb": [255, 0, 0], "commands": ["K03", "R000-G255-B000"] },
+    { "effect": "breathing", "rgb": [255, 0, 0], "commands": ["K03", "R000-G255-B000", "K02"] },
+    { "effect": "color_breathing", "rgb": [0, 255, 255], "commands": ["K03", "R255-G000-B255", "K02", "K02"] },
+    { "effect": "rainbow", "rgb": [0, 255, 255], "commands": ["K03", "R255-G000-B255", "K02", "K02", "K02"] },
+    { "effect": "rainbow_per_tube", "rgb": [0, 0, 255], "commands": ["K03", "R000-G000-B255", "K02", "K02", "K02", "K02"] }
+  ],
+  "effect_after_key": [
+    { "effect": null, "key": "next", "after": "steady" },
+    { "effect": "rainbow", "key": "previous", "after": "steady" },
+    { "effect": "steady", "key": "mode", "after": "breathing" },
+    { "effect": "rainbow", "key": "mode", "after": "rainbow_per_tube" },
+    { "effect": "rainbow_per_tube", "key": "mode", "after": null },
+    { "effect": null, "key": "mode", "after": null },
+    { "effect": "breathing", "key": "power", "after": "breathing" },
+    { "effect": null, "key": "ok", "after": null }
+  ],
+  "full_brightness": [
+    { "rgb": [77, 112, 0], "full": [175, 255, 0] },
+    { "rgb": [0, 56, 112], "full": [0, 128, 255] },
+    { "rgb": [255, 0, 130], "full": [255, 0, 130] },
+    { "rgb": [0, 0, 0], "full": [0, 0, 0] }
+  ],
   "time": [
     { "setting": "alarm_1", "time": "07:05", "command": "A07:05A" },
     { "setting": "alarm_2", "time": "23:59", "command": "A23:59B" },

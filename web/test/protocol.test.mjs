@@ -5,6 +5,7 @@ import { describe, it } from 'node:test';
 import vectors from '../../docs/fixtures/protocol-vectors.json' with { type: 'json' };
 import {
   AuthResultError,
+  EFFECTS,
   HUE_POSITIONS,
   STATUS_LENGTH,
   StatusAssembler,
@@ -12,12 +13,15 @@ import {
   TOGGLES,
   TUBES,
   chunked,
+  effectAfterKey,
   encodeAuth,
   encodeColor,
+  encodeEffect,
   encodeKey,
   encodeTime,
   encodeTimeSync,
   encodeToggle,
+  fullBrightness,
   hueToRgb,
   parseAuthResult,
   parseStatus,
@@ -81,6 +85,20 @@ describe('encoders', () => {
   }
 });
 
+describe('backlight effects', () => {
+  it('lists every effect the mode key reaches, steady first', () => {
+    assert.deepEqual(EFFECTS, vectors.effect.map(({ effect }) => effect));
+  });
+  for (const { effect, rgb, commands } of vectors.effect) {
+    it(`${effect} in ${rgb} → ${commands.join(' ')}`, () => assert.deepEqual(encodeEffect(effect, rgb), commands));
+  }
+  it('rejects an unknown effect', () => assert.throws(() => encodeEffect('strobe', [255, 0, 0]), RangeError));
+  for (const { effect, key, after } of vectors.effect_after_key) {
+    it(`${effect} then ${key} → ${after}`, () => assert.equal(effectAfterKey(effect, key), after));
+  }
+  it('rejects an unknown key', () => assert.throws(() => effectAfterKey('steady', 'reset'), RangeError));
+});
+
 describe('password answers', () => {
   for (const { byte, result } of vectors.auth_result) {
     it(`byte ${byte} → ${result}`, () => assert.equal(parseAuthResult(Uint8Array.of(byte)), result));
@@ -109,6 +127,12 @@ describe('hue slider', () => {
   it('has no position for colours off the wheel', () => {
     assert.equal(rgbToHue([0, 0, 0]), null);
     assert.equal(rgbToHue([120, 60, 30]), null);
+  });
+  for (const { rgb, full } of vectors.full_brightness) {
+    it(`${rgb} at full brightness is ${full}`, () => assert.deepEqual(fullBrightness(rgb), full));
+  }
+  it('finds the slider position of a colour the clock reported dimmed', () => {
+    assert.equal(rgbToHue(fullBrightness([77, 112, 0])), rgbToHue([175, 255, 0]));
   });
 });
 

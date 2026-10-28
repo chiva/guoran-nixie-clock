@@ -11,7 +11,7 @@ This repository has three parts:
 - **[Web app](web/)**: an English replacement for the phone app. It runs in Chrome on Android,
   Windows, macOS, Linux or ChromeOS through Web Bluetooth, and needs no installation.
 - **[Home Assistant integration](custom_components/guoran_nixie/)**: the clock as a device with a
-  backlight light, 16 switches, 4 times and 10 buttons. It works through the local adapter or any
+  backlight light (colour and effects), 16 switches, 4 times and 10 buttons. It works through the local adapter or any
   ESPHome Bluetooth proxy.
 - **[Protocol documentation](docs/PROTOCOL.md)** and a **[capability map](docs/CAPABILITIES.md)**,
   decoded from the original app's source and cross-checked against the clock's manual.

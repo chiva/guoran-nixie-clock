@@ -197,9 +197,16 @@ and drive the backlight (**observed** on an IN1204M, 2026-10-28):
 | `K09` | minus | `-` | − |
 
 `K02` steps through the effects: steady, breathing in the chosen colour, breathing through the
-colours, rainbow on all tubes together, and a rainbow with each tube a different colour (more may
-follow; whether it wraps back to steady is **unverified**). `K01` or `K03` stops any effect. The
-status frame has no field for the effect, so an app cannot read which one is running.
+colours, rainbow on all tubes together, and a rainbow with each tube a different colour (order
+**observed**; whether it wraps back to steady after the last is **unverified**). `K01` or `K03`
+stops any effect. The status frame has no field for the effect, so an app cannot read which one
+is running.
+
+**Choosing an effect.** With no way to read the current effect, both apps start from a known one:
+`K03` (steady, on a preset colour), the wanted colour again, then one `K02` per step from steady.
+Rainbow in red is `K03`, `R000-G255-B000`, `K02`, `K02`, `K02` (vectors under `effect` in
+[`fixtures/protocol-vectors.json`](fixtures/protocol-vectors.json)). Sent 150 ms apart, the
+longest takes under a second. Whether a later colour command stops an effect is **unverified**.
 
 The remote also has VOL, LIGHT, TIME, DATE and TEMP keys that the app does not send. Whether
 `K10` and up reach them is **unverified**.
@@ -281,7 +288,8 @@ rejecting those frames hid every other setting.
   Chrome on macOS negotiated an MTU above 93).
 - **The colour is scaled.** One frame read `R112-G077-B000` after the last command
   `R255-G176-B000`: each field × 7/16, rounded. Perhaps the brightness level (**inferred** from
-  one frame).
+  one frame). Both apps scale a reported colour back to full brightness (brightest channel 255)
+  before showing it on the slider or sending it again.
 - **Junk in fields it never received.** Toggle `C` read `T`, and the power-on and power-off
   times `TG0:84O` and `T44:29C`. The two copies of a frame were identical, so this is what the
   clock held, not damage in transit. The owner had set the times (08:00 and 01:00) with the
@@ -317,7 +325,7 @@ bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the f
 3. Whether off-wheel RGB values and `R000-G000-B000` are honoured.
 4. What toggle `7` (time sync) changes on the clock, compared with a one-off `$…` push.
 5. Whether the clock sends anything unprompted (for example after a front-panel button press).
-6. Whether `K10`+ exist for VOL, LIGHT, TIME, DATE and TEMP, and the full `K02` effect cycle.
+6. Whether `K10`+ exist for VOL, LIGHT, TIME, DATE and TEMP, and whether the `K02` effect cycle wraps.
 7. What the tube toggles do exactly, which physical tube each one drives, and whether 5 and 6 do
    anything on the 4-tube models.
 8. Whether the clock's address changes after unplugging it. To check: in nRF Connect, note the

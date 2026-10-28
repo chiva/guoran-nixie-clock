@@ -83,7 +83,7 @@ button {
   touch-action: manipulation;
 }
 button:active:not(:disabled) { transform: translateY(1px); }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; }
 button.primary { background: var(--glow); color: var(--on-glow); border-color: transparent; font-weight: 650; }
 button.ghost { background: transparent; }
 button:disabled { cursor: default; }
@@ -146,8 +146,22 @@ button:disabled { cursor: default; }
   border: 3px solid var(--text);
 }
 
+.row select {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.color-row + .row { margin-top: 12px; }
+
 .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
 .keys button { font: 600 1.05rem var(--digits); }
+.keys.labelled { grid-template-columns: repeat(2, 1fr); }
+.keys.labelled button { font: 600 1rem/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 .card > .keys:first-of-type { margin-top: 0; }
 
 .tubes { display: grid; grid-template-columns: repeat(var(--tubes, 6), 1fr); gap: 6px; }

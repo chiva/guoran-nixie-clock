@@ -9,7 +9,7 @@ import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.button import DOMAIN as BUTTON_DOMAIN
 from homeassistant.components.button import SERVICE_PRESS
-from homeassistant.components.light import ATTR_HS_COLOR
+from homeassistant.components.light import ATTR_EFFECT, ATTR_EFFECT_LIST, ATTR_HS_COLOR
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.components.time import ATTR_TIME, SERVICE_SET_VALUE
@@ -23,6 +23,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -30,6 +31,7 @@ from custom_components.guoran_nixie.const import DOMAIN
 from custom_components.guoran_nixie.protocol import (
     BLACK,
     STATUS_REQUEST,
+    Effect,
     TimeSetting,
     Toggle,
     encode_time_sync,
@@ -169,11 +171,79 @@ async def test_backlight_turned_on_from_black_uses_the_original_default(
     assert clock.rgb == (0, 255, 255)
 
 
+async def test_backlight_turned_on_restores_a_dimmed_colour_at_full_brightness(
+    hass: HomeAssistant, clock: FakeClock, loaded_entry: MockConfigEntry
+) -> None:
+    clock.rgb = (77, 112, 0)
+    await hass.config_entries.async_reload(loaded_entry.entry_id)
+    await hass.async_block_till_done()
+
+    await _call(hass, LIGHT_DOMAIN, SERVICE_TURN_ON, BACKLIGHT)
+    print("commands:", clock.commands)
+    assert clock.rgb == (175, 255, 0)
+
+
+async def test_backlight_effect_starts_steady_then_steps_to_it(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry, clock: FakeClock
+) -> None:
+    state = hass.states.get(BACKLIGHT)
+    assert state.attributes[ATTR_EFFECT_LIST] == [effect.value for effect in Effect]
+    assert state.attributes[ATTR_EFFECT] is None, "the clock cannot report its effect"
+    sent = len(clock.commands)
+
+    await _call(
+        hass,
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        BACKLIGHT,
+        **{ATTR_EFFECT: Effect.RAINBOW, ATTR_HS_COLOR: (0, 100)},
+    )
+
+    print("commands:", clock.commands)
+    assert clock.commands[sent:] == ["K03", "R000-G255-B000", "K02", "K02", "K02"]
+    assert clock.rgb == (255, 0, 0)
+    state = hass.states.get(BACKLIGHT)
+    assert state.attributes[ATTR_EFFECT] == Effect.RAINBOW
+    assert state.attributes[ATTR_HS_COLOR] == (0.0, 100.0)
+
+
+async def test_backlight_effect_without_a_colour_keeps_the_current_one(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry, clock: FakeClock
+) -> None:
+    await _call(hass, LIGHT_DOMAIN, SERVICE_TURN_ON, BACKLIGHT, **{ATTR_EFFECT: Effect.STEADY})
+    assert clock.commands[-2:] == ["K03", "R255-G000-B255"]
+    assert clock.rgb == (0, 255, 255)
+
+
+async def test_backlight_keys_update_the_effect_shown(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry
+) -> None:
+    def effect() -> str | None:
+        return hass.states.get(BACKLIGHT).attributes[ATTR_EFFECT]
+
+    await _call(hass, BUTTON_DOMAIN, SERVICE_PRESS, f"button.{PREFIX}_backlight_next_effect")
+    assert effect() is None, "mode from an unknown effect leads to an unknown one"
+
+    await _call(hass, BUTTON_DOMAIN, SERVICE_PRESS, f"button.{PREFIX}_backlight_next_colour")
+    assert effect() == Effect.STEADY
+
+    await _call(hass, BUTTON_DOMAIN, SERVICE_PRESS, f"button.{PREFIX}_backlight_next_effect")
+    assert effect() == Effect.BREATHING
+
+    await _call(
+        hass, LIGHT_DOMAIN, SERVICE_TURN_ON, BACKLIGHT, **{ATTR_EFFECT: Effect.RAINBOW_PER_TUBE}
+    )
+    await _call(hass, BUTTON_DOMAIN, SERVICE_PRESS, f"button.{PREFIX}_backlight_next_effect")
+    assert effect() is None, "whether the effects wrap around is unverified"
+
+    await _call(hass, BUTTON_DOMAIN, SERVICE_PRESS, f"button.{PREFIX}_power")
+    assert effect() is None
+
+
 @pytest.mark.parametrize(
     ("name", "command"),
     [
-        ("backlight_previous_colour", "K01"),
-        ("backlight_mode", "K02"),
+        ("backlight_next_effect", "K02"),
         ("backlight_next_colour", "K03"),
         ("power", "K04"),
         ("ok", "K08"),
@@ -185,6 +255,15 @@ async def test_key_buttons_press_the_clock_buttons(
 ) -> None:
     await _call(hass, BUTTON_DOMAIN, SERVICE_PRESS, f"button.{PREFIX}_{name}")
     assert last_command(clock) == command
+
+
+async def test_the_left_colour_button_duplicates_the_right_and_starts_disabled(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry
+) -> None:
+    entry = er.async_get(hass).async_get(f"button.{PREFIX}_backlight_next_colour_left_button")
+    assert entry is not None
+    assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(entry.entity_id) is None
 
 
 async def test_sync_time_button_sets_the_clock_now(
@@ -214,7 +293,7 @@ async def test_command_with_a_changed_password_raises_and_starts_reauth(
     clock.drop_connection()
     clock.password = "222222"
     with pytest.raises(HomeAssistantError, match="refused the password"):
-        await _call(hass, BUTTON_DOMAIN, SERVICE_PRESS, f"button.{PREFIX}_backlight_mode")
+        await _call(hass, BUTTON_DOMAIN, SERVICE_PRESS, f"button.{PREFIX}_backlight_next_effect")
     await hass.async_block_till_done()
     flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
     assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]

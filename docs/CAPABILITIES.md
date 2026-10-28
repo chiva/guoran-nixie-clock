@@ -39,12 +39,15 @@ from one clock's name (`XGGF-IN1204231115.1`), not from the app.
 | 颜色控制台 / Color console slider | `R…-G…-B…` | Backlight hue slider | `light.xggf_1234_backlight` (hue; saturation and brightness ignored) |
 | — | `R000-G000-B000` | Backlight **Off** | turning the light off (unverified on hardware) |
 | 6 tube switches: which tubes take the next colour (tubes left out keep theirs) | `S1x`–`S6x` | Tube backlights 1–4 or 1–6 | `switch.xggf_1234_tube_N_backlight` |
+| — (pressing `M` repeatedly) | `K03`, colour, `K02` × n | **Effect** menu: steady, breathing, breathing through colours, rainbow, rainbow per tube | the light's effect list; shows the effect last set from Home Assistant |
 
 ## Front-panel buttons
 
 | Original | Command | Web app | Home Assistant |
 |---|---|---|---|
-| `<` `M` `>` (under the slider): `<` and `>` both step to the next preset colour and stop any effect; `M` steps through the effects (observed) | `K01` `K02` `K03` | ‹ M › | `button.xggf_1234_backlight_previous_colour`, `_backlight_mode`, `_backlight_next_colour` |
+| `>` (under the slider): next preset colour, stops any effect (observed) | `K03` | **Next colour** | `button.xggf_1234_backlight_next_colour` |
+| `<`: the same as `>`, not the reverse (observed) | `K01` | — | `button.xggf_1234_backlight_next_colour_left_button`, disabled by default |
+| `M`: next effect (observed) | `K02` | **Next effect** | `button.xggf_1234_backlight_next_effect` |
 | 操作按键 / Operating buttons: power, back, +, SET, OK, − (the remote's) | `K04`–`K09` | Front-panel buttons | `button.xggf_1234_power`, `_back`, `_plus`, `_set`, `_ok`, `_minus` |
 
 ## Time

@@ -11,17 +11,21 @@ from custom_components.guoran_nixie.protocol import (
     TUBES,
     AuthResult,
     AuthResultError,
+    Effect,
     Key,
     StatusAssembler,
     StatusFrameError,
     TimeSetting,
     Toggle,
+    effect_after_key,
     encode_auth,
     encode_color,
+    encode_effect,
     encode_key,
     encode_time,
     encode_time_sync,
     encode_toggle,
+    full_brightness,
     hue_to_rgb,
     parse_auth_result,
     parse_status,
@@ -68,6 +72,25 @@ def test_encode_key(vector: dict) -> None:
     assert encode_key(Key(vector["key"])) == vector["command"]
 
 
+def test_effects_are_every_one_the_mode_key_reaches_steady_first() -> None:
+    assert [effect.value for effect in Effect] == [v["effect"] for v in VECTORS["effect"]]
+
+
+@pytest.mark.parametrize("vector", VECTORS["effect"], ids=lambda v: v["effect"])
+def test_encode_effect_starts_steady_then_presses_mode(vector: dict) -> None:
+    rgb = vector["rgb"]
+    assert encode_effect(Effect(vector["effect"]), (rgb[0], rgb[1], rgb[2])) == vector["commands"]
+
+
+@pytest.mark.parametrize(
+    "vector", VECTORS["effect_after_key"], ids=lambda v: f"{v['effect']}-{v['key']}"
+)
+def test_effect_after_key(vector: dict) -> None:
+    effect = None if vector["effect"] is None else Effect(vector["effect"])
+    after = None if vector["after"] is None else Effect(vector["after"])
+    assert effect_after_key(effect, Key(vector["key"])) is after
+
+
 @pytest.mark.parametrize("vector", VECTORS["time"], ids=lambda v: v["command"])
 def test_encode_time(vector: dict) -> None:
     value = time.fromisoformat(vector["time"])
@@ -111,6 +134,12 @@ def test_hue_to_rgb_matches_the_original_slider(vector: dict) -> None:
 def test_hue_to_rgb_rejects_positions_off_the_slider(position: int) -> None:
     with pytest.raises(ValueError, match="hue position"):
         hue_to_rgb(position)
+
+
+@pytest.mark.parametrize("vector", VECTORS["full_brightness"], ids=lambda v: str(v["rgb"]))
+def test_full_brightness_raises_the_brightest_channel_to_255(vector: dict) -> None:
+    rgb = vector["rgb"]
+    assert full_brightness((rgb[0], rgb[1], rgb[2])) == tuple(vector["full"])
 
 
 def test_parse_status() -> None:
