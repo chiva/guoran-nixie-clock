@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
-import { Clock, ClockAuthError, ClockConnectionError } from '../ble.js';
+import { Clock, ClockAuthError, ClockConnectionError, describeBytes } from '../ble.js';
 import {
   FACTORY_PASSWORD,
   NAME_PREFIX,
@@ -135,6 +135,43 @@ describe('connect', () => {
   });
 });
 
+describe('traffic log', () => {
+  const record = () => {
+    const lines = [];
+    clock.addEventListener('traffic', (event) => lines.push(`${event.detail.direction} ${event.detail.text}`));
+    return lines;
+  };
+
+  it('shows bytes as text, and anything unprintable as \\xNN', () => {
+    assert.equal(describeBytes(new TextEncoder().encode('OSC')), 'OSC');
+    assert.equal(describeBytes(Uint8Array.from([0x00, 0x52, 0x0d, 0xff])), '\\x00R\\x0d\\xff');
+  });
+
+  it('records the login without the password, commands, and every raw notification', async () => {
+    const lines = record();
+    await clock.connect(PASSWORD);
+    await clock.requestStatus();
+    console.log(lines.join('\n'));
+    assert.deepEqual(lines.slice(0, 3), ['sent password login', 'received password answer \\x00', `sent ${STATUS_REQUEST}`]);
+    const received = lines.slice(3).map((line) => line.replace(/^received /, ''));
+    assert.equal(received.join(''), fake.statusFrame(), 'the notifications, in order, make up the frame');
+    assert.ok(received.length > 1, 'one line per notification, not per frame');
+    assert.ok(!lines.some((line) => line.includes(PASSWORD)), 'the password never reaches the log');
+  });
+
+  it('records the factory password retry', async () => {
+    fake.password = FACTORY_PASSWORD;
+    const lines = record();
+    await clock.connect(PASSWORD);
+    assert.deepEqual(lines, [
+      'sent password login',
+      'received password answer \\x01',
+      'sent password login with the factory password',
+      'received password answer \\x02',
+    ]);
+  });
+});
+
 describe('status', () => {
   it('reads and announces the whole frame', async () => {
     fake.toggles.alarm_1 = true;
@@ -207,7 +244,7 @@ describe('commands', () => {
     await clock.connect(PASSWORD);
     await Promise.all([clock.send('S11'), clock.send('K02'), clock.send('R255-G000-B000')]);
     assert.deepEqual(fake.commands, ['S11', 'K02', 'R255-G000-B000']);
-    assert.deepEqual(fake.rgb, [255, 0, 0]);
+    assert.deepEqual(fake.rgb, [0, 255, 0], 'the R field lights green');
   });
 
   it('spaces commands by the configured gap', async () => {

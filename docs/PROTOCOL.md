@@ -147,7 +147,7 @@ without the `FFC0` service skip the login.
 
 | Command | Format | Example | Effect |
 |---|---|---|---|
-| Colour | `R{rrr}-G{ggg}-B{bbb}` | `R255-G128-B000` | tube backlight colour, zero-padded decimal |
+| Colour | `R{ggg}-G{rrr}-B{bbb}` | `R128-G255-B000` (orange) | tube backlight colour, zero-padded decimal; **red and green swapped** (see *Colour*) |
 | Toggle | `S{id}{0\|1}` | `S81` | switch a setting (table below) |
 | Key | `K{nn}` | `K02` | press a front-panel button (table below) |
 | Alarm 1 | `AHH:MMA` | `A07:30A` | set alarm 1 time |
@@ -181,21 +181,25 @@ rewritten apps send it hourly (Home Assistant) or every minute while the page is
 
 ### Keys
 
-The app's buttons mirror the clock's 14-key IR remote. `K01`–`K03` sit under the colour slider;
-the remote's backlight keys are *1 change colour*, *2 fixed colour* and *3 colour-change mode*, so
-these most likely step the backlight (**inferred**, unverified).
+The app's buttons mirror the clock's 14-key IR remote. `K01`–`K03` sit under the colour slider
+and drive the backlight (**observed** on an IN1204M, 2026-10-28):
 
 | Code | Button | Original UI | Remote key |
 |---|---|---|---|
-| `K01` | previous backlight colour | `<` | (backlight) |
-| `K02` | backlight mode | `M` | (backlight) |
-| `K03` | next backlight colour | `>` | (backlight) |
+| `K01` | next preset colour, and back to a steady light | `<` | (backlight) |
+| `K02` | next backlight effect | `M` | (backlight) |
+| `K03` | same as `K01`: the same presets in the same order, not the reverse | `>` | (backlight) |
 | `K04` | power | round "close" button | ON-OFF |
 | `K05` | back | "back" button | BACK |
 | `K06` | plus | `+` | + |
 | `K07` | set | `SET` | SET: opens the settings menu |
 | `K08` | OK | `OK` | OK |
 | `K09` | minus | `-` | − |
+
+`K02` steps through the effects: steady, breathing in the chosen colour, breathing through the
+colours, rainbow on all tubes together, and a rainbow with each tube a different colour (more may
+follow; whether it wraps back to steady is **unverified**). `K01` or `K03` stops any effect. The
+status frame has no field for the effect, so an app cannot read which one is running.
 
 The remote also has VOL, LIGHT, TIME, DATE and TEMP keys that the app does not send. Whether
 `K10` and up reach them is **unverified**.
@@ -220,6 +224,11 @@ project function reference table"):
 | 18 | factory reset | 11 resets |
 
 ### Colour
+
+The clock lights **green from the `R` field and red from the `G` field**; `B` is blue (**observed**
+on an IN1204M: `R255-G000-B000` shows green). The original app sent the colour unswapped, so its
+red end of the slider lit green too. The rewritten apps swap the two fields both ways, in commands
+and in status frames, so colours below are the colours the clock shows.
 
 The original slider runs from 0 to 1530 around the hue wheel, in six segments of 255. One channel
 is always 255 and another is always 0:
@@ -251,7 +260,7 @@ R000-G255-B255 S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0 A07:30AA08:15BT0
 
 | Bytes | Field | Parsing (as the original app) |
 |---|---|---|
-| 0–13 | colour `Rrrr-Gggg-Bbbb` | the three numbers |
+| 0–13 | colour `Rggg-Grrr-Bbbb` | the three numbers, red and green swapped as in the command (**inferred**) |
 | 14–61 | 16 toggles | 3rd byte of each: `0` off, anything else on |
 | 62–89 | alarm 1, alarm 2, power-on, power-off | bytes 1–5 of each: `HH:MM` |
 | 90–92 | `CSS` | terminator |
@@ -271,11 +280,11 @@ in a frame, so a lost or corrupted piece costs at most one frame.
 | Date | Clock | Confirmed |
 |---|---|---|
 | 2026-10-27 | IN1204M, `XGGF-IN1204231115.1` | advertisement (`FFF0`, `FFB0`, manufacturer data), the GATT table |
-| 2026-10-28 | same, web app 0.1.1 in Chrome on macOS | password login, colour command |
+| 2026-10-28 | same, web app 0.1.1 in Chrome on macOS | password login; colour command (red and green swapped); `K01`–`K03`; **no status frame shown**, neither in the web app nor, by the owner's account, in the original app |
 | 2026-10-28 | same, Pixel 9 (nRF Connect, web app 0.1.1) | no services discovered; disconnect about 20 s after connecting |
 
-Apart from the colour, everything under *Commands* and *Status frame* still comes from the app's
-code and the manual.
+Everything else under *Commands*, and all of *Status frame*, still comes from the app's code and
+the manual. The tube toggles change the backlight, but not in a pattern yet understood.
 
 ## Open questions
 
@@ -288,10 +297,13 @@ bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the f
 3. Whether off-wheel RGB values and `R000-G000-B000` are honoured.
 4. What toggle `7` (time sync) changes on the clock, compared with a one-off `$…` push.
 5. Whether the clock sends anything unprompted (for example after a front-panel button press).
-6. Whether `K01`–`K03` are the remote's backlight keys, and whether `K10`+ exist for VOL, LIGHT,
-   TIME, DATE and TEMP.
-7. Whether toggles 5 and 6 do anything on the 4-tube models.
+6. Whether `K10`+ exist for VOL, LIGHT, TIME, DATE and TEMP, and the full `K02` effect cycle.
+7. What the tube toggles do exactly, which physical tube each one drives, and whether 5 and 6 do
+   anything on the 4-tube models.
 8. Whether the clock's address changes after unplugging it. To check: in nRF Connect, note the
    address of `XGGF…`, unplug the clock for 10 s, rescan and compare.
 9. Why Android (Pixel 9) discovers no services. An HCI snoop log of one connection attempt shows
    where discovery stalls.
+10. Why no status frame shows up after `OSC`: no reply at all, a reply on another characteristic,
+    or one the parsers reject (another length or layout). The web app's Bluetooth log shows the
+    raw notifications.

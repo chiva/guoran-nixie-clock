@@ -170,6 +170,7 @@ button:disabled { cursor: default; }
   text-shadow: 0 0 10px var(--glow);
 }
 .tube input:focus-visible + span { outline: 2px solid var(--glow); outline-offset: 2px; }
+.tube input:indeterminate + span { border-style: dashed; }
 
 .row, .switch {
   display: flex;
@@ -204,6 +205,8 @@ button:disabled { cursor: default; }
 }
 .switch input:checked { background: var(--glow); border-color: transparent; }
 .switch input:checked::after { transform: translateX(20px); background: var(--on-glow); }
+.switch input:indeterminate { border-style: dashed; }
+.switch input:indeterminate::after { transform: translateX(10px); }
 
 .timed { display: grid; gap: 0; }
 .timed .row input {
@@ -215,6 +218,19 @@ button:disabled { cursor: default; }
   padding: 6px 10px;
 }
 .timed .switch { border-top: 0; }
+.unread .timed .row input { border-style: dashed; color: var(--muted); }
+
+.log {
+  max-height: 40vh;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font: 0.8rem/1.4 var(--digits);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 .digits { font: 600 1.15rem var(--digits); color: var(--glow); text-shadow: 0 0 8px var(--glow-soft); }
 #sync-now { width: 100%; margin: 8px 0; }

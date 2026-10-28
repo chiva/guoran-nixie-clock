@@ -19,6 +19,8 @@ const PASSWORD_STORAGE_KEY = 'guoran-nixie.password';
 const TIME_SYNC_INTERVAL_MS = 60_000;
 const REFRESH_DELAY_MS = 800;
 const TOAST_MS = 4000;
+const LOG_LINES = 500;
+const LOG_ARROWS = { sent: '→', received: '←' };
 
 const TOGGLE_LABELS = {
   time_sync: 'Phone time sync',
@@ -158,10 +160,31 @@ function renderColor(rgb) {
   if (position !== null) $('#hue').value = String(position);
 }
 
+/** Until the clock reports its settings, a switch's position would be a guess: show it as unknown. */
+function renderUnread() {
+  $('#unread').hidden = false;
+  $('#controls').classList.add('unread');
+  for (const input of document.querySelectorAll('[data-toggle]')) input.indeterminate = true;
+}
+
+function logTraffic({ direction, text }) {
+  const log = $('#log');
+  const now = new Date();
+  const stamp = `${now.toLocaleTimeString()}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+  log.append(`${stamp} ${LOG_ARROWS[direction]} ${text}\n`);
+  while (log.childNodes.length > LOG_LINES) log.firstChild.remove();
+  log.scrollTop = log.scrollHeight;
+}
+
 function render(next) {
   status = next;
+  $('#unread').hidden = true;
+  $('#controls').classList.remove('unread');
   renderColor(next.rgb);
-  for (const input of document.querySelectorAll('[data-toggle]')) input.checked = next.toggles[input.dataset.toggle];
+  for (const input of document.querySelectorAll('[data-toggle]')) {
+    input.indeterminate = false;
+    input.checked = next.toggles[input.dataset.toggle];
+  }
   for (const input of document.querySelectorAll('[data-setting]')) {
     if (document.activeElement !== input) input.value = next.times[input.dataset.setting];
   }
@@ -221,9 +244,13 @@ async function toggleConnection() {
   $('#device-line').textContent = 'Connecting…';
   try {
     await clock.connect(password);
+    status = null;
+    renderUnread();
     renderConnection();
-    await clock.requestStatus();
     toast(`Connected to ${clock.name}`);
+    await clock.requestStatus().catch((error) => {
+      toast(`Connected, but the clock did not send its settings (${error.message})`, { error: true });
+    });
   } catch (error) {
     if (error.name === 'NotFoundError') {
       toast('No clock chosen. Close the original app or any other phone connected to the clock.');
@@ -281,6 +308,16 @@ function wireEvents() {
     }
   });
   clock.addEventListener('status', (event) => render(event.detail));
+  clock.addEventListener('traffic', (event) => logTraffic(event.detail));
+  $('#clear-log').addEventListener('click', () => ($('#log').textContent = ''));
+  $('#copy-log').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('#log').textContent);
+      toast('Log copied');
+    } catch (error) {
+      toast(`Could not copy the log: ${error.message}`, { error: true });
+    }
+  });
   clock.addEventListener('disconnected', () => {
     renderConnection();
     if (!disconnectRequested) toast('The clock disconnected');

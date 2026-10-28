@@ -96,14 +96,20 @@ function requireMember(collection, value, what) {
   if (!collection.includes(value)) throw new RangeError(`unknown ${what}: ${value}`);
 }
 
-/** [0, 255, 255] → "R000-G255-B255". */
-export function encodeColor([red, green, blue]) {
-  for (const channel of [red, green, blue]) {
+/** The clock lights green from the "R" field and red from the "G" field (observed on an
+ * IN1204M; the original app sent them unswapped, so its slider showed the wrong colours too).
+ * Swapping is its own inverse: it turns a colour into the fields, and the fields into a colour. */
+const swapRedGreen = ([first, second, third]) => [second, first, third];
+
+/** Red [255, 0, 0] → "R000-G255-B000": see swapRedGreen. */
+export function encodeColor(rgb) {
+  for (const channel of rgb) {
     if (!Number.isInteger(channel) || channel < 0 || channel > CHANNEL_MAX) {
-      throw new RangeError(`colour channels must be 0…${CHANNEL_MAX}: ${[red, green, blue]}`);
+      throw new RangeError(`colour channels must be 0…${CHANNEL_MAX}: ${rgb}`);
     }
   }
-  return `R${pad(red, 3)}-G${pad(green, 3)}-B${pad(blue, 3)}`;
+  const [r, g, b] = swapRedGreen(rgb).map((channel) => pad(channel, 3));
+  return `R${r}-G${g}-B${b}`;
 }
 
 export function encodeToggle(toggle, on) {
@@ -204,10 +210,11 @@ export function parseStatus(frame) {
     throw new StatusFrameError(`not a status frame: ${JSON.stringify(frame)}`);
   }
   const color = COLOR_FIELD.exec(frame.slice(0, COLOR_LENGTH));
-  const rgb = color ? color.slice(1).map(Number) : [];
-  if (rgb.length !== 3 || rgb.some((channel) => channel > CHANNEL_MAX)) {
+  const fields = color ? color.slice(1).map(Number) : [];
+  if (fields.length !== 3 || fields.some((channel) => channel > CHANNEL_MAX)) {
     throw new StatusFrameError(`bad colour field: ${frame.slice(0, COLOR_LENGTH)}`);
   }
+  const rgb = swapRedGreen(fields);
   const toggles = {};
   TOGGLES.forEach((toggle, index) => {
     // As the original app: the third character, "0" for off and anything else for on.

@@ -194,7 +194,8 @@ class FakeClock:
 
     def _apply(self, kind: str, match: re.Match[str]) -> None:
         if kind == "color":
-            self.rgb = (int(match[1]), int(match[2]), int(match[3]))
+            # The colour the LEDs show: the clock lights green from "R" and red from "G".
+            self.rgb = (int(match[2]), int(match[1]), int(match[3]))
         elif kind == "toggle":
             toggle = next(t for t, char in TOGGLE_IDS.items() if char == match[1])
             self.toggles[toggle] = match[2] == "1"

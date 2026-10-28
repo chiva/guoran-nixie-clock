@@ -40,7 +40,7 @@ backlight switches. On a 4-tube clock, tubes 5 and 6 presumably control nothing.
 
 | Original | Command | Web app | Home Assistant |
 |---|---|---|---|
-| `<` `M` `>` (under the slider): previous colour, backlight mode, next colour (inferred) | `K01` `K02` `K03` | ‹ M › | `button.xggf_1234_backlight_previous_colour`, `_backlight_mode`, `_backlight_next_colour` |
+| `<` `M` `>` (under the slider): `<` and `>` both step to the next preset colour and stop any effect; `M` steps through the effects (observed) | `K01` `K02` `K03` | ‹ M › | `button.xggf_1234_backlight_previous_colour`, `_backlight_mode`, `_backlight_next_colour` |
 | 操作按键 / Operating buttons: power, back, +, SET, OK, − (the remote's) | `K04`–`K09` | Front-panel buttons | `button.xggf_1234_power`, `_back`, `_plus`, `_set`, `_ok`, `_minus` |
 
 ## Time

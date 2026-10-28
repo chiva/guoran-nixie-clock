@@ -1,9 +1,10 @@
 {
   "_comment": "Shared encode/decode vectors for web/protocol.js and custom_components/guoran_nixie/protocol.py. Derived from the original app's www/js/index.js; see docs/PROTOCOL.md.",
   "color": [
-    { "rgb": [255, 0, 0], "command": "R255-G000-B000" },
-    { "rgb": [0, 255, 255], "command": "R000-G255-B255" },
-    { "rgb": [7, 42, 199], "command": "R007-G042-B199" },
+    { "rgb": [255, 0, 0], "command": "R000-G255-B000" },
+    { "rgb": [0, 255, 0], "command": "R255-G000-B000" },
+    { "rgb": [0, 255, 255], "command": "R255-G000-B255" },
+    { "rgb": [7, 42, 199], "command": "R042-G007-B199" },
     { "rgb": [0, 0, 0], "command": "R000-G000-B000" }
   ],
   "color_invalid": [[256, 0, 0], [-1, 0, 0], [0, 0, 300]],
@@ -67,7 +68,7 @@
     { "position": 1400, "rgb": [255, 0, 130] }
   ],
   "status": {
-    "frame": "R000-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CCSS",
+    "frame": "R255-G000-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CCSS",
     "expected": {
       "rgb": [0, 255, 255],
       "toggles": {

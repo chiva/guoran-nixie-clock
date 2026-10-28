@@ -188,7 +188,11 @@ export class FakeClock extends EventTarget {
   #apply(command) {
     this.commands.push(command);
     if (command === STATUS_REQUEST) this.#answerStatus();
-    else if (command.startsWith('R')) this.rgb = command.match(/\d{3}/g).map(Number);
+    else if (command.startsWith('R')) {
+      // The colour the LEDs show: the clock lights green from "R" and red from "G".
+      const [rField, gField, bField] = command.match(/\d{3}/g).map(Number);
+      this.rgb = [gField, rField, bField];
+    }
     else if (command.startsWith('S')) {
       this.toggles[TOGGLES['1234567890ABCDEF'.indexOf(command[1])]] = command[2] === '1';
     } else if (command.startsWith('A') || command.startsWith('T')) {

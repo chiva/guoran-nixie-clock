@@ -166,12 +166,21 @@ class ClockStatus:
         return replace(self, times=MappingProxyType({**self.times, setting: value}))
 
 
+def _swap_red_green(rgb: RGB) -> RGB:
+    """The clock lights green from the "R" field and red from the "G" field (observed on an
+    IN1204M; the original app sent them unswapped, so its slider showed the wrong colours too).
+    Swapping is its own inverse: it turns a colour into the fields, and the fields into a colour.
+    """
+    first, second, third = rgb
+    return (second, first, third)
+
+
 def encode_color(rgb: RGB) -> str:
-    """`(0, 255, 255)` → `R000-G255-B255`."""
+    """Red `(255, 0, 0)` → `R000-G255-B000`: see `_swap_red_green`."""
     if any(not 0 <= channel <= CHANNEL_MAX for channel in rgb):
         raise ValueError(f"colour channels must be 0…{CHANNEL_MAX}: {rgb}")
-    red, green, blue = rgb
-    return f"R{red:03d}-G{green:03d}-B{blue:03d}"
+    r_field, g_field, b_field = _swap_red_green(rgb)
+    return f"R{r_field:03d}-G{g_field:03d}-B{b_field:03d}"
 
 
 def encode_toggle(toggle: Toggle, on: bool) -> str:
@@ -254,9 +263,10 @@ def parse_status(frame: str) -> ClockStatus:
     color = _COLOR_FIELD.fullmatch(frame[:_COLOR_LENGTH])
     if not color:
         raise StatusFrameError(f"bad colour field: {frame[:_COLOR_LENGTH]!r}")
-    rgb: RGB = (int(color[1]), int(color[2]), int(color[3]))
-    if any(channel > CHANNEL_MAX for channel in rgb):
+    fields: RGB = (int(color[1]), int(color[2]), int(color[3]))
+    if any(channel > CHANNEL_MAX for channel in fields):
         raise StatusFrameError(f"bad colour field: {frame[:_COLOR_LENGTH]!r}")
+    rgb = _swap_red_green(fields)
 
     toggles: dict[Toggle, bool] = {}
     for index, toggle in enumerate(Toggle):

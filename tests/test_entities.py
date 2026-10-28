@@ -114,7 +114,7 @@ async def test_backlight_follows_the_hue_and_remembers_it_when_off(
     assert state.attributes[ATTR_HS_COLOR] == (180.0, 100.0)
 
     await _call(hass, LIGHT_DOMAIN, SERVICE_TURN_ON, BACKLIGHT, **{ATTR_HS_COLOR: (120, 40)})
-    assert last_command(clock) == "R000-G255-B000"
+    assert last_command(clock) == "R255-G000-B000", "green goes in the R field"
     assert clock.rgb == (0, 255, 0)
     assert hass.states.get(BACKLIGHT).attributes[ATTR_HS_COLOR] == (120.0, 100.0)
 

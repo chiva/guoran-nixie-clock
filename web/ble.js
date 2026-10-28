@@ -70,8 +70,17 @@ function nextNotification(characteristic) {
   });
 }
 
+const PRINTABLE = /^[\x20-\x7e]$/;
+const hexByte = (byte) => `\\x${byte.toString(16).padStart(2, '0')}`;
+
+/** Bytes as text for the Bluetooth log: printable ASCII as is, anything else as \xNN. */
+export function describeBytes(bytes) {
+  return Array.from(bytes, (byte) => (PRINTABLE.test(String.fromCharCode(byte)) ? String.fromCharCode(byte) : hexByte(byte))).join('');
+}
+
 /**
- * Events: "status" (detail: parsed status), "disconnected".
+ * Events: "status" (detail: parsed status), "disconnected", and "traffic" (detail: { direction:
+ * "sent" | "received", text }) for every command, notification and login step.
  * Every status frame the clock sends is announced, requested or not.
  */
 export class Clock extends EventTarget {
@@ -209,7 +218,10 @@ export class Clock extends EventTarget {
     for (const current of new Set([password, FACTORY_PASSWORD])) {
       const answer = nextNotification(notify);
       await this.#writeChunks(write, encodeAuth(current, password));
-      result = parseAuthResult(await withTimeout(answer, this.#timing.authTimeoutMs, 'the clock did not answer the login'));
+      this.#traffic('sent', current === password ? 'password login' : 'password login with the factory password');
+      const bytes = await withTimeout(answer, this.#timing.authTimeoutMs, 'the clock did not answer the login');
+      this.#traffic('received', `password answer ${describeBytes(bytes)}`);
+      result = parseAuthResult(bytes);
       if (AUTH_ACCEPTED.has(result)) return;
       if (result !== 'wrong_password') break;
     }
@@ -222,6 +234,7 @@ export class Clock extends EventTarget {
     if (wait > 0) await sleep(wait);
     try {
       await this.#writeChunks(this.#tx, command);
+      this.#traffic('sent', command);
     } catch (error) {
       throw new ClockConnectionError(`sending ${command}: ${error.message}`);
     } finally {
@@ -245,7 +258,12 @@ export class Clock extends EventTarget {
     return waiter;
   }
 
+  #traffic(direction, text) {
+    this.dispatchEvent(new CustomEvent('traffic', { detail: { direction, text } }));
+  }
+
   #onUart(bytes) {
+    this.#traffic('received', describeBytes(bytes));
     for (const frame of this.#assembler.feed(bytes)) {
       for (const waiter of this.#statusWaiters) waiter.resolve(frame);
       try {
