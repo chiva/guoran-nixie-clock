@@ -4,6 +4,7 @@ import { Clock, ClockAuthError } from './ble.js';
 import {
   BLACK,
   DEFAULT_PASSWORD,
+  TUBES,
   encodeColor,
   encodeKey,
   encodeTime,
@@ -12,6 +13,7 @@ import {
   hueToRgb,
   rgbToCss,
   rgbToHue,
+  tubeCount,
   validatePassword,
 } from './protocol.js';
 
@@ -34,7 +36,6 @@ const TOGGLE_LABELS = {
   english_voice: 'English voice',
   sensor_switch: 'Sensor switch',
 };
-const TUBES = ['tube_1', 'tube_2', 'tube_3', 'tube_4', 'tube_5', 'tube_6'];
 const KEY_LABELS = {
   previous: ['‹', 'Previous backlight colour'],
   mode: ['M', 'Backlight mode'],
@@ -150,6 +151,14 @@ function renderConnection() {
   $('#controls').disabled = !connected;
   $('#connect').textContent = connected ? 'Disconnect' : 'Connect';
   $('#device-line').textContent = connected ? `Connected to ${clock.name}` : clock.name ? `${clock.name} · disconnected` : 'Not connected';
+  renderTubes();
+}
+
+/** Only the tubes this model has: a 4-tube clock has no use for switches 5 and 6. */
+function renderTubes() {
+  const count = tubeCount(clock.name);
+  $('#tubes').style.setProperty('--tubes', count);
+  $('#tubes').querySelectorAll('.tube').forEach((tube, index) => (tube.hidden = index >= count));
 }
 
 function renderColor(rgb) {

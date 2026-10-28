@@ -86,6 +86,19 @@ class Toggle(StrEnum):
     SENSOR_SWITCH = "sensor_switch"
 
 
+TUBES: Final = tuple(toggle for toggle in Toggle if toggle.startswith("tube_"))
+"""One backlight toggle per tube, as many as the 6-tube models have."""
+
+_MODEL_TUBES = re.compile(r"XGGF-IN1[24]0([46])")
+
+
+def tube_count(name: str | None) -> int:
+    """How many tubes a clock has, from its advertised name: `XGGF-IN1204…` is an IN1204M, with 4
+    (inferred from one clock's name). Any other name gets all of them, so no tube goes missing."""
+    match = _MODEL_TUBES.match(name or "")
+    return int(match[1]) if match else len(TUBES)
+
+
 TOGGLE_IDS: Final[Mapping[Toggle, str]] = MappingProxyType(
     dict(zip(Toggle, "1234567890ABCDEF", strict=True))
 )

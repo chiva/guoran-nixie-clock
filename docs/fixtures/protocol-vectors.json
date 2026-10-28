@@ -8,6 +8,15 @@
     { "rgb": [0, 0, 0], "command": "R000-G000-B000" }
   ],
   "color_invalid": [[256, 0, 0], [-1, 0, 0], [0, 0, 300]],
+  "tube_count": [
+    { "name": "XGGF-IN1204231115.1", "tubes": 4 },
+    { "name": "XGGF-IN1404000000.1", "tubes": 4 },
+    { "name": "XGGF-IN1206000000.1", "tubes": 6 },
+    { "name": "XGGF-IN1406000000.1", "tubes": 6 },
+    { "name": "XGGF-VFD11-4EC305", "tubes": 6 },
+    { "name": "XGGF-1234", "tubes": 6 },
+    { "name": null, "tubes": 6 }
+  ],
   "toggle": [
     { "toggle": "tube_1", "on": true, "command": "S11" },
     { "toggle": "tube_6", "on": false, "command": "S60" },

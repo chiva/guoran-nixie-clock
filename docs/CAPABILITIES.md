@@ -25,8 +25,10 @@ Remote: ON-OFF, SET, BACK, OK, +, −, VOL, LIGHT (brightness), TIME, DATE, TEMP
 backlight (change colour, fixed colour, colour-change mode). The Bluetooth app sends the first
 six; see [PROTOCOL.md § Keys](PROTOCOL.md#keys).
 
-The same app and protocol serve the 4- and 6-tube models, which is why there are six tube
-backlight switches. On a 4-tube clock, tubes 5 and 6 presumably control nothing.
+The same app and protocol serve the 4- and 6-tube models (on the 6-tube ones, tubes 5 and 6 show
+the seconds), which is why the protocol has six tube backlight switches. Both new apps read the
+model from the advertised name and show only tubes 1–4 on an IN1204M or IN1404M
+(`XGGF-IN1204…`, `XGGF-IN1404…`). Any other name gets all six.
 
 ## Backlight
 
@@ -34,7 +36,7 @@ backlight switches. On a 4-tube clock, tubes 5 and 6 presumably control nothing.
 |---|---|---|---|
 | 颜色控制台 / Color console slider | `R…-G…-B…` | Backlight hue slider | `light.xggf_1234_backlight` (hue; saturation and brightness ignored) |
 | — | `R000-G000-B000` | Backlight **Off** | turning the light off (unverified on hardware) |
-| 6 tube switches | `S1x`–`S6x` | Tube backlights 1–6 | `switch.xggf_1234_tube_N_backlight` |
+| 6 tube switches: which tubes take the next colour (tubes left out keep theirs) | `S1x`–`S6x` | Tube backlights 1–4 or 1–6 | `switch.xggf_1234_tube_N_backlight` |
 
 ## Front-panel buttons
 

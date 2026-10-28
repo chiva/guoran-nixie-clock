@@ -66,6 +66,34 @@ async def test_setup_creates_one_device_with_all_entities(
     assert hass.states.get(ALARM_1).state == "off"
 
 
+async def test_a_4_tube_clock_gets_4_tube_switches_and_loses_older_ones(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    clock: FakeClock,
+    bluetooth_api: list[Any],
+    advertisements: list[BluetoothServiceInfoBleak],
+    entity_registry: er.EntityRegistry,
+) -> None:
+    advertisements[:] = [service_info(name="XGGF-IN1204231115.1")]
+    config_entry.add_to_hass(hass)
+    for toggle in (Toggle.TUBE_5, Toggle.TUBE_6):
+        entity_registry.async_get_or_create(
+            "switch", DOMAIN, f"{ADDRESS}_{toggle.value}", config_entry=config_entry
+        )
+
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    tubes = sorted(
+        entry.unique_id.removeprefix(f"{ADDRESS}_")
+        for entry in er.async_entries_for_config_entry(entity_registry, config_entry.entry_id)
+        if entry.unique_id.startswith(f"{ADDRESS}_tube_")
+    )
+    print("tube switches:", tubes)
+    assert tubes == ["tube_1", "tube_2", "tube_3", "tube_4"]
+    assert hass.states.get("switch.xggf_1234_tube_4_backlight") is not None
+
+
 async def test_first_refresh_reads_status_then_sets_the_clock_time(
     hass: HomeAssistant, loaded_entry: MockConfigEntry, clock: FakeClock
 ) -> None:

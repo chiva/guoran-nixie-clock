@@ -63,6 +63,20 @@ export const TOGGLES = Object.freeze([
   'auto_brightness', 'hour_12', 'ambient_light', 'hourly_chime', 'english_voice', 'sensor_switch',
 ]);
 
+/** One backlight toggle per tube, as many as the 6-tube models have. */
+export const TUBES = Object.freeze(TOGGLES.filter((toggle) => toggle.startsWith('tube_')));
+
+const MODEL_TUBES = /^XGGF-IN1[24]0([46])/;
+
+/**
+ * How many tubes a clock has, from its advertised name: "XGGF-IN1204…" is an IN1204M, with 4
+ * (inferred from one clock's name). Any other name gets all of them, so no tube goes missing.
+ */
+export function tubeCount(name) {
+  const match = MODEL_TUBES.exec(name ?? '');
+  return match ? Number(match[1]) : TUBES.length;
+}
+
 /** The character after "S" in each toggle command. */
 export const TOGGLE_IDS = Object.freeze(
   Object.fromEntries(TOGGLES.map((toggle, index) => [toggle, '1234567890ABCDEF'[index]])),

@@ -92,6 +92,11 @@ class GuoranClient:
         return self._ble_device.address
 
     @property
+    def name(self) -> str | None:
+        """The advertised name, when the adapter or proxy reported one."""
+        return self._ble_device.name
+
+    @property
     def is_connected(self) -> bool:
         return self._client is not None and self._client.is_connected
 
