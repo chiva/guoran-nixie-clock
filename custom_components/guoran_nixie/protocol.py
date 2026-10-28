@@ -279,7 +279,7 @@ def parse_status(frame: str) -> ClockStatus:
     would set them (`R…-G…-B…`, sixteen `S<id><0|1>`, four times) and closed by `CSS`.
 
     A time field that is not a time is None: an IN1204M sent `T44:29C` and `TG0:84O` for times
-    never set.
+    it had never received.
     """
     if (
         len(frame) != STATUS_LENGTH

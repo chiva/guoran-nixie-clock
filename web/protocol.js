@@ -217,7 +217,8 @@ const TIMES_START = COLOR_LENGTH + TOGGLES.length * TOGGLE_LENGTH;
 /**
  * Decode a complete status frame: the clock's settings written as the commands that would set
  * them (R…-G…-B…, sixteen S<id><0|1>, four times) and closed by "CSS". Times come back "HH:MM",
- * or null for one that is not a time: an IN1204M sent "T44:29C" and "TG0:84O" for times never set.
+ * or null for one that is not a time: an IN1204M sent "T44:29C" and "TG0:84O" for times it had
+ * never received.
  */
 export function parseStatus(frame) {
   if (

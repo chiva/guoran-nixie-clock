@@ -268,8 +268,8 @@ R000-G255-B255 S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0 A07:30AA08:15BT0
 The original app accepted a frame when its length was 93, it started with `R` and it ended with
 `CSS`. The rewritten parsers also reject colour channels above 255; such frames are treated as
 missing and requested again. A time field that is not a time is reported as unknown instead: an
-IN1204M sent `T44:29C` (power-off) and `TG0:84O` (power-on) for times never set, and rejecting
-those frames hid every other setting.
+IN1204M sent `T44:29C` (power-off) and `TG0:84O` (power-on) for times it had never received, and
+rejecting those frames hid every other setting.
 
 ### What a real IN1204M sends (2026-10-28, Chrome on macOS)
 
@@ -282,9 +282,11 @@ those frames hid every other setting.
 - **The colour is scaled.** One frame read `R112-G077-B000` after the last command
   `R255-G176-B000`: each field × 7/16, rounded. Perhaps the brightness level (**inferred** from
   one frame).
-- **Junk in unset fields.** Toggle `C` read `T`, and the power-on and power-off times
-  `TG0:84O` and `T44:29C`. The two copies of a frame were identical, so this is what the clock
-  holds, not damage in transit.
+- **Junk in fields it never received.** Toggle `C` read `T`, and the power-on and power-off
+  times `TG0:84O` and `T44:29C`. The two copies of a frame were identical, so this is what the
+  clock held, not damage in transit. The owner had set the times (08:00 and 01:00) with the
+  original app, whose unacknowledged writes the clock often missed; set again from the web app,
+  they read back correctly.
 
 ### Reassembly
 

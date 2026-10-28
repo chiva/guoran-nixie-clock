@@ -44,6 +44,8 @@ permission for Chrome. *Add to Home screen* installs it as an app that also open
 - The default password is 210709, the one the original app sets. It can be changed under
   *Connection settings*.
 - iPhone and iPad browsers do not support Web Bluetooth.
+- The clock reports its settings only right after connecting, so **Read clock settings**
+  reconnects. The *Bluetooth log* at the bottom shows every command and reply.
 - **Known issue:** on a Pixel 9 the connection fails because Android never lists the clock's
   services. Chrome on macOS works with the same clock.
 
@@ -84,7 +86,8 @@ original app was ever used with the clock).
   connection.
 - With *Keep the clock's time in sync* on (the default), the clock is set to Home Assistant's
   local time on the first refresh and then hourly. **Sync time now** does it on demand.
-- Commands update the entity at once, then a refresh confirms what the clock kept.
+- Commands update the entity at once. The clock reports its settings only right after a
+  connection opens, so the next refresh, which reconnects, confirms what it kept.
 - A changed password triggers a re-authentication prompt.
 
 ### Example automation
