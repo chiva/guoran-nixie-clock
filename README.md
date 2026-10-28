@@ -20,10 +20,11 @@ The original app is not included here; the vendor still hosts it at
 
 The APK is a 2019-era DCloud HTML5+ wrapper. It targets Android API 26, and its closed-source
 Bluetooth runtime predates the Android 12 permission model (`BLUETOOTH_SCAN` and
-`BLUETOOTH_CONNECT`, which the manifest does not declare), which makes it the likely culprit.
-Its scan filter (`FFF0`, `FFB0`) is not: the clock advertises exactly those services. The exact
-failure on a recent phone has not been captured. The app also asks for contacts, microphone and
-phone-state permissions it never uses.
+`BLUETOOTH_CONNECT`, which the manifest does not declare). Its scan filter (`FFF0`, `FFB0`) is
+not the problem: the clock advertises exactly those services. But the app is not the only
+problem either: on a Pixel 9, Android itself never lists the clock's services, even to nRF
+Connect (see [Service discovery on Android](docs/PROTOCOL.md#service-discovery-on-android)).
+The app also asks for contacts, microphone and phone-state permissions it never uses.
 Repackaging it would not fix the runtime, so it is replaced instead. The vendor's own manual
 admits it: *"If the clock cannot be found, it may be the compatibility problem between mobile
 phone and software, please change the mobile phone"*. The vendor's WeChat mini program 果然时钟
@@ -40,6 +41,8 @@ permission for Chrome. *Add to Home screen* installs it as an app that also open
 - The default password is 210709, the one the original app sets. It can be changed under
   *Connection settings*.
 - iPhone and iPad browsers do not support Web Bluetooth.
+- **Known issue:** on a Pixel 9 the connection fails because Android never lists the clock's
+  services. Chrome on macOS works with the same clock.
 
 To run it locally (`localhost` counts as a secure context):
 

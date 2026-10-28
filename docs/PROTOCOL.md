@@ -39,20 +39,29 @@ All UUIDs are 16-bit, on the Bluetooth base UUID `0000xxxx-0000-1000-8000-00805f
 | `FF90`, `FD00` | | | present on the 2023 IN1204M, unused by any app (**observed**) |
 | `180A` | `2A23`, `2A26`, `2A27`, `2A29` | read | Device Information (system ID, firmware, hardware, manufacturer) |
 
-The table is confirmed on a 2023 IN1204M with `chrome://bluetooth-internals`. Chrome on a laptop
-listed that single clock under two addresses: `BA:03:57:4B:51:C1`, the one a phone saw and the
-one inside its advertisement, and `B8:8E:23:74:58:AA`, from which the services above were read
-(**observed**). Home Assistant identifies a clock by its address, so if it changes, the clock is
-discovered again as a new device.
+The table is confirmed on a 2023 IN1204M with `chrome://bluetooth-internals` on macOS. The clock's
+address is `BA:03:57:4B:51:C1`, the one Android sees and the one inside its advertisement. Chrome
+on macOS showed `B8:8E:23:74:58:AA` instead: macOS hides Bluetooth addresses, so Chrome shows the
+first 6 bytes of a SHA-256 of the system's device identifier
+(`GetPeripheralHashAddress` in Chromium's `bluetooth_low_energy_device_mac.mm`). Home Assistant
+identifies a clock by its address, so if that ever changed, the clock would be discovered again
+as a new device (**unverified**: whether it stays the same after unplugging the clock).
 
-### Service discovery is slow
+### Service discovery on Android
 
-The module publishes its services some time after the connection is made. An Android phone
-asking straight away saw `FFF0`, `FF90` and `FFE5` but not `FFE0` ("No Services matching UUID
-0000ffe0… found"). The original app polled the service list every 500 ms, up to 20 times, before
-giving up, and an older version of it waited 3 s. The web app polls every 500 ms for up to 5 s,
-reconnects once, and then reports the services it did see. Bleak, which Home Assistant uses,
-completes discovery as part of connecting.
+On a Pixel 9, Android never lists the clock's services: nRF Connect's *Client* tab stays empty,
+and the clock drops the connection about 20 s after connecting (**observed**). Web Bluetooth
+fails the same way ("No Services matching UUID 0000ffe0…", or the web app's "dropped the
+connection"). The same clock lists every service at once to Chrome on macOS, where the web app
+logs in and sets the colour, so the module itself works. The cause is **unknown**: Android's
+cached copy of the service list, the module's handling of a newer phone's connection setup, or
+the module dropping a phone that has not logged in.
+
+The original app polled the service list every 500 ms, up to 20 times, before giving up, and an
+older version of it waited 3 s, which suggests discovery was slow on the phones of its day too.
+The web app also polls every 500 ms for up to 5 s, reconnects once, and then reports the services
+it saw, or when the clock dropped the connection. Bleak, which Home Assistant uses, completes
+discovery as part of connecting.
 
 The original app scanned with a service filter `["ffb0", "fff0"]` and then filtered on the name
 prefix. The rewritten apps filter by name only.
@@ -261,10 +270,12 @@ in a frame, so a lost or corrupted piece costs at most one frame.
 
 | Date | Clock | Confirmed |
 |---|---|---|
-| 2026-10-27 | IN1204M, `XGGF-IN1204231115.1` | advertisement (`FFF0`, `FFB0`, manufacturer data), the GATT table, slow service discovery |
+| 2026-10-27 | IN1204M, `XGGF-IN1204231115.1` | advertisement (`FFF0`, `FFB0`, manufacturer data), the GATT table |
+| 2026-10-28 | same, web app 0.1.1 in Chrome on macOS | password login, colour command |
+| 2026-10-28 | same, Pixel 9 (nRF Connect, web app 0.1.1) | no services discovered; disconnect about 20 s after connecting |
 
-No command has been tried on a clock yet: everything under *Commands* and *Status frame* still
-comes from the app's code and the manual.
+Apart from the colour, everything under *Commands* and *Status frame* still comes from the app's
+code and the manual.
 
 ## Open questions
 
@@ -280,7 +291,7 @@ bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the f
 6. Whether `K01`–`K03` are the remote's backlight keys, and whether `K10`+ exist for VOL, LIGHT,
    TIME, DATE and TEMP.
 7. Whether toggles 5 and 6 do anything on the 4-tube models.
-8. Why one clock shows up under two addresses (`BA:03:57:4B:51:C1`, in its advertisement, and
-   `B8:8E:23:74:58:AA`, which exposed the services), whether both connect, and whether either
-   changes after unplugging the clock. To check: in nRF Connect, note the address(es) of
-   `XGGF…`, unplug the clock for 10 s, rescan and compare.
+8. Whether the clock's address changes after unplugging it. To check: in nRF Connect, note the
+   address of `XGGF…`, unplug the clock for 10 s, rescan and compare.
+9. Why Android (Pixel 9) discovers no services. An HCI snoop log of one connection attempt shows
+   where discovery stalls.
