@@ -122,11 +122,14 @@ export function encodeKey(key) {
   return KEY_CODES[key];
 }
 
+const MAX_HOUR = 23;
+const MAX_MINUTE = 59;
+
 /** Alarm 1 at 07:05 → "A07:05A"; power-off at 18:30 → "T18:30C". */
 export function encodeTime(setting, hour, minute) {
   requireMember(TIME_SETTINGS, setting, 'time setting');
   const valid = (value, max) => Number.isInteger(value) && value >= 0 && value <= max;
-  if (!valid(hour, 23) || !valid(minute, 59)) throw new RangeError(`not a time: ${hour}:${minute}`);
+  if (!valid(hour, MAX_HOUR) || !valid(minute, MAX_MINUTE)) throw new RangeError(`not a time: ${hour}:${minute}`);
   const [prefix, suffix] = TIME_FORMATS[setting];
   return `${prefix}${pad(hour)}:${pad(minute)}${suffix}`;
 }
@@ -199,7 +202,9 @@ const TIMES_START = COLOR_LENGTH + TOGGLES.length * TOGGLE_LENGTH;
 
 /**
  * Decode a complete status frame: the clock's settings written as the commands that would set
- * them (R…-G…-B…, sixteen S<id><0|1>, four times) and closed by "CSS". Times come back "HH:MM".
+ * them (R…-G…-B…, sixteen S<id><0|1>, four times) and closed by "CSS". Times come back "HH:MM",
+ * or null for one the clock holds but no clock could show (a never-set power-off time read
+ * "T44:29C" on an IN1204M).
  */
 export function parseStatus(frame) {
   if (
@@ -225,10 +230,9 @@ export function parseStatus(frame) {
     const start = TIMES_START + index * TIME_LENGTH;
     const field = frame.slice(start, start + TIME_LENGTH);
     const match = TIME_FIELD.exec(field);
-    if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) {
-      throw new StatusFrameError(`bad ${setting} field: ${field}`);
-    }
-    times[setting] = `${match[1]}:${match[2]}`;
+    if (!match) throw new StatusFrameError(`bad ${setting} field: ${field}`);
+    const valid = Number(match[1]) <= MAX_HOUR && Number(match[2]) <= MAX_MINUTE;
+    times[setting] = valid ? `${match[1]}:${match[2]}` : null;
   });
   return { rgb, toggles, times };
 }

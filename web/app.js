@@ -186,7 +186,7 @@ function render(next) {
     input.checked = next.toggles[input.dataset.toggle];
   }
   for (const input of document.querySelectorAll('[data-setting]')) {
-    if (document.activeElement !== input) input.value = next.times[input.dataset.setting];
+    if (document.activeElement !== input) input.value = next.times[input.dataset.setting] ?? '';
   }
   $('#updated').textContent = `Read at ${new Date().toLocaleTimeString()}`;
 }

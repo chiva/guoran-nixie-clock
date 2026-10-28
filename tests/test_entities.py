@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import time
+from typing import Any
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
@@ -14,7 +15,12 @@ from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.components.time import ATTR_TIME, SERVICE_SET_VALUE
 from homeassistant.components.time import DOMAIN as TIME_DOMAIN
 from homeassistant.config_entries import SOURCE_REAUTH
-from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
@@ -104,6 +110,28 @@ async def test_time_sets_the_clock_to_the_minute(
     assert last_command(clock) == command
     assert clock.times[setting] == time(6, 30)
     assert hass.states.get(entity_id).state == "06:30:00"
+
+
+async def test_a_time_no_clock_could_show_is_unknown_and_can_be_set(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    clock: FakeClock,
+    bluetooth_api: list[Any],
+) -> None:
+    entity_id = f"time.{PREFIX}_power_off_time"
+    clock.unset_times.add(TimeSetting.POWER_OFF)
+    config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get(entity_id).state == STATE_UNKNOWN
+    assert hass.states.get(f"time.{PREFIX}_power_on_time").state == "07:00:00"
+
+    clock.unset_times.clear()
+    await _call(hass, TIME_DOMAIN, SERVICE_SET_VALUE, entity_id, **{ATTR_TIME: "23:15:00"})
+
+    assert last_command(clock) == "T23:15C"
+    assert hass.states.get(entity_id).state == "23:15:00"
 
 
 async def test_backlight_follows_the_hue_and_remembers_it_when_off(

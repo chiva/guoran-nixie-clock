@@ -73,6 +73,9 @@ class FakeServices:
         return self.characteristics.get(uuid)
 
 
+UNSET_TIME = "44:29"
+
+
 @dataclass
 class FakeClock:
     password: str = DEFAULT_PASSWORD
@@ -82,6 +85,8 @@ class FakeClock:
     times: dict[TimeSetting, time] = field(
         default_factory=lambda: dict.fromkeys(TimeSetting, time(7, 0))
     )
+    unset_times: set[TimeSetting] = field(default_factory=set)
+    """Times the clock reports as `UNSET_TIME`, as a real one did for a never-set power-off time."""
     ignore_status_requests: int = 0
     """Status requests to leave unanswered, as a flaky link would."""
     garble_status_replies: int = 0
@@ -164,9 +169,15 @@ class FakeClock:
         return (
             encode_color(self.rgb)
             + "".join(encode_toggle(toggle, self.toggles[toggle]) for toggle in Toggle)
-            + "".join(encode_time(setting, self.times[setting]) for setting in TimeSetting)
+            + "".join(self._time_field(setting) for setting in TimeSetting)
             + STATUS_TERMINATOR
         )
+
+    def _time_field(self, setting: TimeSetting) -> str:
+        if setting not in self.unset_times:
+            return encode_time(setting, self.times[setting])
+        prefix, suffix = TIME_FORMATS[setting]
+        return f"{prefix}{UNSET_TIME}{suffix}"
 
     # The module and the clock's firmware
     def _on_auth_write(self, payload: str) -> None:

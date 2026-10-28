@@ -112,6 +112,14 @@ def test_parse_status() -> None:
     } == expected["times"]
 
 
+def test_parse_status_reports_a_time_no_clock_could_show_as_unknown() -> None:
+    vector = VECTORS["status_unset_time"]
+    status = parse_status(vector["frame"])
+    assert {
+        setting.value: value and value.strftime("%H:%M") for setting, value in status.times.items()
+    } == vector["times"]
+
+
 @pytest.mark.parametrize("vector", VECTORS["status_invalid"], ids=lambda v: v["reason"])
 def test_parse_status_rejects_malformed_frames(vector: dict) -> None:
     with pytest.raises(StatusFrameError):
