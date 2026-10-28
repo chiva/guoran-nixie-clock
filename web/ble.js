@@ -157,7 +157,8 @@ export class Clock extends EventTarget {
       await rx.startNotifications();
       this.#tx = await services.get(UART_TX_SERVICE).getCharacteristic(UART_TX_CHAR);
       const allowed = CHARACTERISTIC_PROPERTIES.filter((property) => this.#tx.properties[property]);
-      this.#traffic('info', `command characteristic allows: ${allowed.join(', ')}`);
+      const mode = this.#tx.properties.write ? 'with' : 'without';
+      this.#traffic('info', `command characteristic allows: ${allowed.join(', ')}; writing ${mode} response`);
     } catch (error) {
       this.#device.gatt.disconnect();
       if (error instanceof ClockAuthError || error instanceof ClockConnectionError) throw error;
@@ -295,7 +296,9 @@ export class Clock extends EventTarget {
   }
 
   async #writeChunks(characteristic, text) {
-    const withResponse = !characteristic.properties.writeWithoutResponse;
+    // Acknowledged whenever the characteristic allows it, as the Home Assistant client does: the
+    // clock ignored many commands written without response (2026-10-28).
+    const withResponse = Boolean(characteristic.properties.write);
     for (const chunk of chunked(encoder.encode(text))) {
       await (withResponse
         ? characteristic.writeValueWithResponse(chunk)

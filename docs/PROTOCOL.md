@@ -322,9 +322,10 @@ bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the f
    address of `XGGF…`, unplug the clock for 10 s, rescan and compare.
 9. Why Android (Pixel 9) discovers no services. An HCI snoop log of one connection attempt shows
    where discovery stalls.
-10. Why the clock ignores some commands. On 2026-10-28, `K04` (power) and `K02` (mode) often
-    took several presses, and a status frame read on reconnecting showed tube 2 off after `S21`
-    (sent 0.7 s after an unanswered `OSC`), while `S31` (sent 4 s after one) was kept. Candidates:
-    the unanswered `OSC`s upsetting the clock's serial parser, writes dropped between Chrome and
-    the module, or the clock missing bytes while busy. The web app no longer sends `OSC` after
-    each command, which tests the first.
+10. Why the clock ignores some commands. On 2026-10-28, written without response, six `K02`
+    (mode) presses changed the effect once and six `K04` (power) presses switched it twice,
+    with no pattern in the time since the previous write; a status frame read on reconnecting
+    showed tube 2 off after `S21`. Candidates: writes dropped between Chrome and the module, the
+    unanswered `OSC`s upsetting the clock's serial parser, or the clock missing bytes while busy.
+    The web app now writes with response when the module allows it, and no longer sends `OSC`
+    after each command.

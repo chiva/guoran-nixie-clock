@@ -183,7 +183,7 @@ describe('traffic log', () => {
     assert.deepEqual(lines.slice(0, 4), [
       'sent password login',
       'received password answer \\x00',
-      'info command characteristic allows: writeWithoutResponse',
+      'info command characteristic allows: writeWithoutResponse; writing without response',
       `sent ${STATUS_REQUEST}`,
     ]);
     const received = lines.slice(4).map((line) => line.replace(/^received /, ''));
@@ -201,7 +201,7 @@ describe('traffic log', () => {
       'received password answer \\x01',
       'sent password login with the factory password',
       'received password answer \\x02',
-      'info command characteristic allows: writeWithoutResponse',
+      'info command characteristic allows: writeWithoutResponse; writing without response',
     ]);
   });
 });
@@ -285,6 +285,17 @@ describe('commands', () => {
     assert.ok(uart.every((w) => w.withResponse === false));
     assert.deepEqual(fake.commands, [sync, 'S20']);
     assert.equal(fake.toggles.tube_2, false);
+  });
+
+  it('writes with response when the module allows both, and says so in the log', async () => {
+    fake.characteristics[UART_TX_CHAR].properties.write = true;
+    const lines = [];
+    clock.addEventListener('traffic', (event) => lines.push(event.detail.text));
+    await clock.connect(PASSWORD);
+    await clock.send('K02');
+    const uart = fake.writes.filter((w) => w.uuid === UART_TX_CHAR);
+    assert.deepEqual(uart.map((w) => w.withResponse), [true]);
+    assert.ok(lines.includes('command characteristic allows: write, writeWithoutResponse; writing with response'));
   });
 
   it('sets a time the next status reports back', async () => {
