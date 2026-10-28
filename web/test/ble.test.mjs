@@ -123,6 +123,34 @@ describe('connect', () => {
     await assert.rejects(clock.connect(PASSWORD), /dropped the connection .*\(offered: FFF0, FF90, FFE5\)/);
   });
 
+  it('opens the chooser again when Chrome has forgotten the clock', async () => {
+    let disconnects = 0;
+    clock.addEventListener('disconnected', () => (disconnects += 1));
+    await clock.connect(PASSWORD);
+    fake.gatt.disconnect();
+    fake.outOfRange = true;
+    await clock.connect(PASSWORD);
+    assert.equal(clock.connected, true);
+    assert.equal(fake.chooserShown, 2);
+    fake.gatt.disconnect();
+    assert.equal(disconnects, 2, 'the same device chosen again is not watched twice');
+  });
+
+  it('reports a clock still out of range after choosing it again', async () => {
+    await clock.connect(PASSWORD);
+    fake.gatt.disconnect();
+    fake.outOfRange = true;
+    // A chooser whose scan does not bring the clock back.
+    const requestDevice = async (options) => {
+      fake.chooserShown += 1;
+      fake.lastRequest = options;
+      return fake;
+    };
+    Object.defineProperty(globalThis, 'navigator', { value: { bluetooth: { requestDevice } }, configurable: true });
+    await assert.rejects(clock.connect(PASSWORD), (error) => error.name === 'ClockOutOfRangeError' && /no longer in range/.test(error.message));
+    assert.equal(fake.chooserShown, 2, 'the chooser opens once, not in a loop');
+  });
+
   it('reconnects to the same clock without the chooser', async () => {
     await clock.connect(PASSWORD);
     fake.gatt.disconnect();

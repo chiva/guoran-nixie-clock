@@ -48,6 +48,11 @@ export class ClockAuthError extends Error {
   name = 'ClockAuthError';
 }
 
+/** Chrome no longer knows the remembered clock: only its device chooser can find it again. */
+export class ClockOutOfRangeError extends ClockConnectionError {
+  name = 'ClockOutOfRangeError';
+}
+
 const encoder = new TextEncoder();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -85,6 +90,7 @@ export function describeBytes(bytes) {
  */
 export class Clock extends EventTarget {
   #device = null;
+  #watched = new WeakSet();
   #tx = null;
   #assembler = new StatusAssembler();
   #queue = Promise.resolve();
@@ -109,15 +115,31 @@ export class Clock extends EventTarget {
     return Boolean(this.#device?.gatt.connected && this.#tx);
   }
 
-  /** Shows Chrome's device chooser the first time; reconnects to the same clock afterwards. */
+  /** Shows Chrome's device chooser the first time; reconnects to the same clock afterwards. Chrome
+   * forgets a device it has not seen advertising lately ("no longer in range", as on macOS after a
+   * disconnect), and only its chooser scans again: then the chooser opens once more. */
   async connect(password) {
-    if (!this.#device) {
-      this.#device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: NAME_PREFIX }],
-        optionalServices: OPTIONAL_SERVICES,
-      });
+    if (this.#device) {
+      try {
+        return await this.#open(password);
+      } catch (error) {
+        if (!(error instanceof ClockOutOfRangeError)) throw error;
+        this.#device = null;
+      }
+    }
+    this.#device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: NAME_PREFIX }],
+      optionalServices: OPTIONAL_SERVICES,
+    });
+    // Chrome may hand back the same device object when the same clock is chosen again.
+    if (!this.#watched.has(this.#device)) {
+      this.#watched.add(this.#device);
       this.#device.addEventListener('gattserverdisconnected', () => this.#onDisconnected());
     }
+    return this.#open(password);
+  }
+
+  async #open(password) {
     try {
       const services = await this.#connectWithServices();
       await this.#authenticate(services.get(AUTH_SERVICE), password);
@@ -134,13 +156,23 @@ export class Clock extends EventTarget {
     }
   }
 
+  async #gattConnect(connection) {
+    try {
+      return await this.#device.gatt.connect();
+    } catch (error) {
+      // Chrome reports a device dropped from its cache this way, before any radio traffic.
+      if (connection === 1 && error.name === 'NetworkError') throw new ClockOutOfRangeError(`${this.name}: ${error.message}`);
+      throw error;
+    }
+  }
+
   /** Connect and wait for service discovery to include the UART services; reconnect once if it
    * never does. Resolves with the services by UUID. */
   async #connectWithServices() {
     let offered = [];
     let droppedAfterMs = null;
     for (let connection = 1; connection <= CONNECTION_ATTEMPTS; connection += 1) {
-      const server = await this.#device.gatt.connect();
+      const server = await this.#gattConnect(connection);
       const connectedAt = performance.now();
       droppedAfterMs = null;
       for (let poll = 1; poll <= this.#timing.discoveryPolls; poll += 1) {

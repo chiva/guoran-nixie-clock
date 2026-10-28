@@ -86,6 +86,9 @@ export class FakeClock extends EventTarget {
   /** Connections, from the first, that the clock drops before any service is discovered, as a
    * Pixel 9 saw: no services at all, then a disconnect about 20 s in. */
   droppedDiscoveryConnections = 0;
+  /** As Chrome on macOS after a disconnect: the device left Chrome's cache, so connecting fails
+   * until the chooser scans for it again. */
+  outOfRange = false;
   discoveryPolls = 0;
   #polls = 0;
   #uart = '';
@@ -102,6 +105,7 @@ export class FakeClock extends EventTarget {
     this.gatt = {
       connected: false,
       async connect() {
+        if (clock.outOfRange) throw new DOMException('Bluetooth Device is no longer in range.', 'NetworkError');
         clock.connections += 1;
         clock.gatt.connected = true;
         clock.#uart = '';
@@ -143,6 +147,7 @@ export class FakeClock extends EventTarget {
       requestDevice: async (options) => {
         this.chooserShown += 1;
         this.lastRequest = options;
+        this.outOfRange = false;
         return this;
       },
     };

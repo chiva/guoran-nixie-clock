@@ -254,6 +254,9 @@ async function toggleConnection() {
   } catch (error) {
     if (error.name === 'NotFoundError') {
       toast('No clock chosen. Close the original app or any other phone connected to the clock.');
+    } else if (error.name === 'SecurityError') {
+      // The chooser needs a fresh tap when reconnecting took too long to open it from the first.
+      toast('Tap Connect again to choose the clock.');
     } else {
       if (error instanceof ClockAuthError) $('.settings').open = true;
       toast(error.message, { error: true });
