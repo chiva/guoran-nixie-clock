@@ -3,6 +3,9 @@
 Control the Guoran (果然, "点亮你的生活") Bluetooth nixie tube clock without its abandoned
 Android app. That clock is the GANXIN / diym.vip IN1204M, its IN1404M, IN1206M and IN1406M
 siblings, and any other clock advertising as `XGGF…` that the original `guoran.apk` could drive.
+
+![The IN1204M: four IN-12 nixie tubes in a walnut case on brass feet, showing 17:09](docs/images/in1204m.jpg)
+
 This repository has three parts:
 
 - **[Web app](web/)**: an English replacement for the phone app. It runs in Chrome on Android,
