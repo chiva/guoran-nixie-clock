@@ -48,6 +48,16 @@ export class ClockAuthError extends Error {
   name = 'ClockAuthError';
 }
 
+/** The clock never offered the UART services; `offered` lists the short UUIDs it did offer. */
+export class ClockDiscoveryError extends ClockConnectionError {
+  name = 'ClockDiscoveryError';
+
+  constructor(message, offered) {
+    super(message);
+    this.offered = offered;
+  }
+}
+
 /** Chrome no longer knows the remembered clock: only its device chooser can find it again. */
 export class ClockOutOfRangeError extends ClockConnectionError {
   name = 'ClockOutOfRangeError';
@@ -198,15 +208,17 @@ export class Clock extends EventTarget {
       }
       this.#device.gatt.disconnect();
     }
-    const found = offered.length ? offered.map(shortUuid).join(', ') : 'none';
+    const shortOffered = offered.map(shortUuid);
+    const found = shortOffered.length ? shortOffered.join(', ') : 'none';
     const needed = REQUIRED_SERVICES.map(shortUuid).join(' and ');
     const failure =
       droppedAfterMs === null
         ? `did not offer services ${needed}`
         : `dropped the connection ${Math.round(droppedAfterMs / MS_PER_S)} s after connecting, before offering services ${needed}`;
-    throw new ClockConnectionError(
+    throw new ClockDiscoveryError(
       `${this.name} ${failure} (offered: ${found}). ` +
         'Close any other app connected to the clock, unplug it for 10 s and try again.',
+      shortOffered,
     );
   }
 

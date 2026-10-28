@@ -1,6 +1,6 @@
 // The page: builds the controls, turns user input into commands, and renders status frames.
 
-import { Clock, ClockAuthError } from './ble.js';
+import { Clock, ClockAuthError, ClockDiscoveryError } from './ble.js';
 import {
   BLACK,
   DEFAULT_PASSWORD,
@@ -25,6 +25,12 @@ const PASSWORD_STORAGE_KEY = 'guoran-nixie.password';
 const TIME_SYNC_INTERVAL_MS = 60_000;
 const TOAST_MS = 4000;
 const LOG_LINES = 500;
+const ANDROID = /Android/;
+/** Android lists services at the 23-byte MTU the clock asks for, then drops the clock's oversized
+ * reply (docs/PROTOCOL.md, "Service discovery on Android"); retrying cannot help. */
+const ANDROID_DISCOVERY_MESSAGE =
+  'Android cannot read this clock: the clock answers with a service list larger than it agreed to, ' +
+  'and Android discards it. Use Chrome on a computer, or Home Assistant.';
 /** Bluetooth traffic, what the user did on the page, and what the page told them. */
 const LOG_MARKERS = { sent: '→', received: '←', info: '·', action: '●', message: 'i', error: '!' };
 
@@ -318,6 +324,9 @@ async function openSession(open) {
   } catch (error) {
     if (error.name === 'NotFoundError') {
       toast('No clock chosen. Close the original app or any other phone connected to the clock.');
+    } else if (error instanceof ClockDiscoveryError && !error.offered.length && ANDROID.test(navigator.userAgent)) {
+      logEntry('error', error.message);
+      toast(ANDROID_DISCOVERY_MESSAGE, { error: true });
     } else if (error.name === 'SecurityError') {
       // The chooser needs a fresh tap when reconnecting took too long to open it from the first.
       toast('Tap Connect again to choose the clock.');
