@@ -180,8 +180,13 @@ describe('traffic log', () => {
     await clock.connect(PASSWORD);
     await clock.requestStatus();
     console.log(lines.join('\n'));
-    assert.deepEqual(lines.slice(0, 3), ['sent password login', 'received password answer \\x00', `sent ${STATUS_REQUEST}`]);
-    const received = lines.slice(3).map((line) => line.replace(/^received /, ''));
+    assert.deepEqual(lines.slice(0, 4), [
+      'sent password login',
+      'received password answer \\x00',
+      'info command characteristic allows: writeWithoutResponse',
+      `sent ${STATUS_REQUEST}`,
+    ]);
+    const received = lines.slice(4).map((line) => line.replace(/^received /, ''));
     assert.equal(received.join(''), fake.statusFrame(), 'the notifications, in order, make up the frame');
     assert.ok(received.length > 1, 'one line per notification, not per frame');
     assert.ok(!lines.some((line) => line.includes(PASSWORD)), 'the password never reaches the log');
@@ -196,6 +201,7 @@ describe('traffic log', () => {
       'received password answer \\x01',
       'sent password login with the factory password',
       'received password answer \\x02',
+      'info command characteristic allows: writeWithoutResponse',
     ]);
   });
 });
@@ -213,6 +219,27 @@ describe('status', () => {
     assert.equal(status.toggles.alarm_1, true);
     assert.equal(status.times.alarm_1, '06:45');
     assert.deepEqual(await announced, status);
+  });
+
+  it('reads the settings again by reconnecting, as the clock answers only once per connection', async () => {
+    fake.statusOncePerConnection = true;
+    await clock.connect(PASSWORD);
+    await clock.requestStatus();
+    await clock.send(encodeTime('alarm_1', 6, 15));
+    await assert.rejects(clock.requestStatus(), ClockConnectionError, 'a second request on the same connection');
+
+    await clock.reconnect(PASSWORD);
+    const status = await clock.requestStatus();
+
+    assert.equal(status.times.alarm_1, '06:15');
+    assert.equal(fake.connections, 2);
+    assert.equal(fake.chooserShown, 1, 'the same clock, without the chooser');
+  });
+
+  it('connects on a reconnect while disconnected', async () => {
+    await clock.reconnect(PASSWORD);
+    assert.ok(clock.connected);
+    assert.equal(fake.connections, 1);
   });
 
   it('asks again when the reply goes missing', async () => {

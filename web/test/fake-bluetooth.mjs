@@ -71,6 +71,9 @@ export class FakeClock extends EventTarget {
   toggles = Object.fromEntries(TOGGLES.map((toggle) => [toggle, false]));
   times = Object.fromEntries(TIME_SETTINGS.map((setting) => [setting, '07:00']));
   ignoreStatusRequests = 0;
+  /** As a real IN1204M: only the first status request of each connection gets an answer. */
+  statusOncePerConnection = false;
+  #statusAnswered = false;
   garbleStatusReplies = 0;
   commands = [];
   authWrites = [];
@@ -110,6 +113,7 @@ export class FakeClock extends EventTarget {
         clock.gatt.connected = true;
         clock.#uart = '';
         clock.#polls = 0;
+        clock.#statusAnswered = false;
         return clock.gatt;
       },
       disconnect() {
@@ -212,6 +216,8 @@ export class FakeClock extends EventTarget {
       this.ignoreStatusRequests -= 1;
       return;
     }
+    if (this.statusOncePerConnection && this.#statusAnswered) return;
+    this.#statusAnswered = true;
     let frame = this.statusFrame();
     if (this.garbleStatusReplies > 0) {
       this.garbleStatusReplies -= 1;

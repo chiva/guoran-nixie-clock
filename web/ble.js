@@ -75,6 +75,8 @@ function nextNotification(characteristic) {
   });
 }
 
+const CHARACTERISTIC_PROPERTIES = ['read', 'write', 'writeWithoutResponse', 'notify', 'indicate'];
+
 const PRINTABLE = /^[\x20-\x7e]$/;
 const hexByte = (byte) => `\\x${byte.toString(16).padStart(2, '0')}`;
 
@@ -85,7 +87,8 @@ export function describeBytes(bytes) {
 
 /**
  * Events: "status" (detail: parsed status), "disconnected", and "traffic" (detail: { direction:
- * "sent" | "received", text }) for every command, notification and login step.
+ * "sent" | "received" | "info", text }) for every command, notification and login step, and what
+ * the connection allows.
  * Every status frame the clock sends is announced, requested or not.
  */
 export class Clock extends EventTarget {
@@ -144,11 +147,17 @@ export class Clock extends EventTarget {
       const services = await this.#connectWithServices();
       await this.#authenticate(services.get(AUTH_SERVICE), password);
       const rx = await services.get(UART_RX_SERVICE).getCharacteristic(UART_RX_CHAR);
-      rx.addEventListener('characteristicvaluechanged', (event) => {
-        this.#onUart(new Uint8Array(event.target.value.buffer));
-      });
+      // Chrome may hand back the same characteristic object on a reconnect: listen once.
+      if (!this.#watched.has(rx)) {
+        this.#watched.add(rx);
+        rx.addEventListener('characteristicvaluechanged', (event) => {
+          this.#onUart(new Uint8Array(event.target.value.buffer));
+        });
+      }
       await rx.startNotifications();
       this.#tx = await services.get(UART_TX_SERVICE).getCharacteristic(UART_TX_CHAR);
+      const allowed = CHARACTERISTIC_PROPERTIES.filter((property) => this.#tx.properties[property]);
+      this.#traffic('info', `command characteristic allows: ${allowed.join(', ')}`);
     } catch (error) {
       this.#device.gatt.disconnect();
       if (error instanceof ClockAuthError || error instanceof ClockConnectionError) throw error;
@@ -198,6 +207,17 @@ export class Clock extends EventTarget {
       `${this.name} ${failure} (offered: ${found}). ` +
         'Close any other app connected to the clock, unplug it for 10 s and try again.',
     );
+  }
+
+  /** Drop the connection and open a new one. The clock answers a status request only right after
+   * connecting (observed on an IN1204M), so this is how its settings are read again. */
+  async reconnect(password) {
+    if (this.connected) {
+      const closed = new Promise((resolve) => this.addEventListener('disconnected', resolve, { once: true }));
+      this.disconnect();
+      await closed;
+    }
+    return this.connect(password);
   }
 
   disconnect() {

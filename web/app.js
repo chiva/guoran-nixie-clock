@@ -17,11 +17,10 @@ import {
 
 const PASSWORD_STORAGE_KEY = 'guoran-nixie.password';
 const TIME_SYNC_INTERVAL_MS = 60_000;
-const REFRESH_DELAY_MS = 800;
 const TOAST_MS = 4000;
 const LOG_LINES = 500;
 /** Bluetooth traffic, what the user did on the page, and what the page told them. */
-const LOG_MARKERS = { sent: '→', received: '←', action: '●', message: 'i', error: '!' };
+const LOG_MARKERS = { sent: '→', received: '←', info: '·', action: '●', message: 'i', error: '!' };
 
 const TOGGLE_LABELS = {
   time_sync: 'Phone time sync',
@@ -61,7 +60,6 @@ const pad = (value) => String(value).padStart(2, '0');
 const clockTime = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 
 let status = null;
-let refreshTimer = null;
 let toastTimer = null;
 let pendingColor = null;
 let colorInFlight = false;
@@ -212,15 +210,9 @@ function render(next) {
   $('#updated').textContent = `Read at ${new Date().toLocaleTimeString()}`;
 }
 
-/** Read the settings back shortly after a change, to show what the clock actually kept. */
-function scheduleRefresh() {
-  clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => run(() => clock.requestStatus()), REFRESH_DELAY_MS);
-}
-
-async function command(text) {
-  await run(() => clock.send(text));
-  scheduleRefresh();
+/** No read-back: the clock answers a status request only right after connecting. */
+function command(text) {
+  return run(() => clock.send(text));
 }
 
 /** Slider drags fire many events: send the latest colour only, one write at a time. */
@@ -237,7 +229,6 @@ async function sendColor(rgb) {
   } finally {
     colorInFlight = false;
   }
-  scheduleRefresh();
 }
 
 function currentPassword() {
@@ -252,6 +243,17 @@ async function toggleConnection() {
     clock.disconnect();
     return;
   }
+  await openSession((password) => clock.connect(password));
+}
+
+/** The clock reports its settings only right after connecting: reading them again reconnects. */
+async function readSettings() {
+  disconnectRequested = clock.connected;
+  await openSession((password) => clock.reconnect(password));
+}
+
+/** Connect (with `open`), then show the clock's settings. */
+async function openSession(open) {
   let password;
   try {
     password = currentPassword();
@@ -264,7 +266,7 @@ async function toggleConnection() {
   $('#connect').disabled = true;
   $('#device-line').textContent = 'Connecting…';
   try {
-    await clock.connect(password);
+    await open(password);
     status = null;
     renderUnread();
     renderConnection();
@@ -310,7 +312,7 @@ function wireEvents() {
     clock.forget();
     renderConnection();
   });
-  $('#refresh').addEventListener('click', () => run(() => clock.requestStatus()));
+  $('#refresh').addEventListener('click', readSettings);
   $('#sync-now').addEventListener('click', async () => {
     await run(() => clock.send(encodeTimeSync(new Date())));
     toast('Clock time set');
@@ -331,6 +333,8 @@ function wireEvents() {
   $('#controls').addEventListener('change', (event) => {
     const { toggle, setting } = event.target.dataset;
     if (toggle) {
+      // Assume the clock took it: there is no reading it back without reconnecting.
+      if (status) status.toggles[toggle] = event.target.checked;
       command(encodeToggle(toggle, event.target.checked));
       if (toggle === 'time_sync' && event.target.checked) run(() => clock.send(encodeTimeSync(new Date())));
     } else if (setting && event.target.value) {

@@ -271,6 +271,21 @@ missing and requested again. A time field that is not a time is reported as unkn
 IN1204M sent `T44:29C` (power-off) and `TG0:84O` (power-on) for times never set, and rejecting
 those frames hid every other setting.
 
+### What a real IN1204M sends (2026-10-28, Chrome on macOS)
+
+- **One answer per connection.** The `OSC` sent right after logging in was answered on each of
+  three connections, about 0.7–1.6 s later. About a hundred later `OSC`s on the same connections
+  were not, including one sent alone 6 s after the first answer. The original app also sent
+  `OSC` only after logging in. Both rewritten apps therefore read the settings by reconnecting.
+- **Twice.** Each answer arrived twice, 30–60 ms apart, each copy in a single notification (so
+  Chrome on macOS negotiated an MTU above 93).
+- **The colour is scaled.** One frame read `R112-G077-B000` after the last command
+  `R255-G176-B000`: each field × 7/16, rounded. Perhaps the brightness level (**inferred** from
+  one frame).
+- **Junk in unset fields.** Toggle `C` read `T`, and the power-on and power-off times
+  `TG0:84O` and `T44:29C`. The two copies of a frame were identical, so this is what the clock
+  holds, not damage in transit.
+
 ### Reassembly
 
 Buffer the notifications. Drop bytes before an `R`. Once 93 bytes from that `R` have arrived,
@@ -286,7 +301,8 @@ in a frame, so a lost or corrupted piece costs at most one frame.
 | 2026-10-28 | same, Pixel 9 (nRF Connect, web app 0.1.1) | no services discovered; disconnect about 20 s after connecting |
 
 Everything else under *Commands*, and all of *Status frame*, still comes from the app's code and
-the manual. The tube toggles change the backlight, but not in a pattern yet understood.
+the manual. The tube toggles choose which tubes take the next colour (tubes left out keep theirs). Commands
+are often not taken (see open question 10), which made their effect look random.
 
 ## Open questions
 
@@ -306,5 +322,9 @@ bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the f
    address of `XGGF…`, unplug the clock for 10 s, rescan and compare.
 9. Why Android (Pixel 9) discovers no services. An HCI snoop log of one connection attempt shows
    where discovery stalls.
-10. Why some `OSC` requests get no status frame within 5 s, while others are answered. The web
-    app's Bluetooth log shows the raw notifications.
+10. Why the clock ignores some commands. On 2026-10-28, `K04` (power) and `K02` (mode) often
+    took several presses, and a status frame read on reconnecting showed tube 2 off after `S21`
+    (sent 0.7 s after an unanswered `OSC`), while `S31` (sent 4 s after one) was kept. Candidates:
+    the unanswered `OSC`s upsetting the clock's serial parser, writes dropped between Chrome and
+    the module, or the clock missing bytes while busy. The web app no longer sends `OSC` after
+    each command, which tests the first.
