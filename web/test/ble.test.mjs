@@ -318,9 +318,8 @@ describe('commands', () => {
     await spaced.connect(PASSWORD);
     const start = performance.now();
     await spaced.send('K01', 'K02', 'K03');
-    // Timers may fire up to ~1 ms early relative to performance.now(): allow that per gap.
     const elapsed = performance.now() - start;
-    assert.ok(elapsed >= 2 * 40 - 2, `two gaps between three commands, got ${elapsed} ms`);
+    assert.ok(elapsed >= 2 * 40, `two full gaps between three commands, got ${elapsed} ms`);
     spaced.disconnect();
   });
 

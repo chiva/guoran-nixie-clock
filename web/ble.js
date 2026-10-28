@@ -283,8 +283,11 @@ export class Clock extends EventTarget {
 
   async #write(command) {
     if (!this.connected) throw new ClockConnectionError('not connected');
-    const wait = this.#lastCommandAt + this.#timing.commandGapMs - performance.now();
-    if (wait > 0) await sleep(wait);
+    // Timers round to whole milliseconds and may fire early: wait until the gap has really passed.
+    let wait;
+    while ((wait = this.#lastCommandAt + this.#timing.commandGapMs - performance.now()) > 0) {
+      await sleep(Math.ceil(wait));
+    }
     try {
       await this.#writeChunks(this.#tx, command);
       this.#traffic('sent', command);
