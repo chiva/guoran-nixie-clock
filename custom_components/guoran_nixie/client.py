@@ -92,6 +92,11 @@ class GuoranClient:
         return self._ble_device.address
 
     @property
+    def name(self) -> str | None:
+        """The advertised name, when the adapter or proxy reported one."""
+        return self._ble_device.name
+
+    @property
     def is_connected(self) -> bool:
         return self._client is not None and self._client.is_connected
 
@@ -114,6 +119,9 @@ class GuoranClient:
     async def async_fetch_status(self) -> ClockStatus:
         """Ask for the status frame and decode it.
 
+        The clock answers a status request only right after a connection opens (observed on an
+        IN1204M), so every attempt starts a new connection.
+
         Raises:
             GuoranConnectionError: unreachable, or no complete frame after every attempt.
             GuoranAuthError: wrong password.
@@ -121,9 +129,10 @@ class GuoranClient:
         """
         bad_frame: StatusFrameError | None = None
         async with self._lock:
-            client = await self._ensure_connected()
             try:
                 for attempt in range(1, STATUS_ATTEMPTS + 1):
+                    await self._disconnect()
+                    client = await self._ensure_connected()
                     self._assembler.reset()
                     self._status_waiter = asyncio.get_running_loop().create_future()
                     await self._send_command(client, STATUS_REQUEST)
@@ -271,6 +280,8 @@ class GuoranClient:
             self._idle_timer = None
 
     async def _disconnect(self) -> None:
+        # An operation that held the lock while async_disconnect waited may have restarted it.
+        self._cancel_idle_timer()
         client, self._client = self._client, None
         if client is not None:
             await self._safe_disconnect(client)

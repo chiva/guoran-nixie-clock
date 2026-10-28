@@ -39,20 +39,29 @@ All UUIDs are 16-bit, on the Bluetooth base UUID `0000xxxx-0000-1000-8000-00805f
 | `FF90`, `FD00` | | | present on the 2023 IN1204M, unused by any app (**observed**) |
 | `180A` | `2A23`, `2A26`, `2A27`, `2A29` | read | Device Information (system ID, firmware, hardware, manufacturer) |
 
-The table is confirmed on a 2023 IN1204M with `chrome://bluetooth-internals`. Chrome on a laptop
-listed that single clock under two addresses: `BA:03:57:4B:51:C1`, the one a phone saw and the
-one inside its advertisement, and `B8:8E:23:74:58:AA`, from which the services above were read
-(**observed**). Home Assistant identifies a clock by its address, so if it changes, the clock is
-discovered again as a new device.
+The table is confirmed on a 2023 IN1204M with `chrome://bluetooth-internals` on macOS. The clock's
+address is `BA:03:57:4B:51:C1`, the one Android sees and the one inside its advertisement. Chrome
+on macOS showed `B8:8E:23:74:58:AA` instead: macOS hides Bluetooth addresses, so Chrome shows the
+first 6 bytes of a SHA-256 of the system's device identifier
+(`GetPeripheralHashAddress` in Chromium's `bluetooth_low_energy_device_mac.mm`). Home Assistant
+identifies a clock by its address, so if that ever changed, the clock would be discovered again
+as a new device (**unverified**: whether it stays the same after unplugging the clock).
 
-### Service discovery is slow
+### Service discovery on Android
 
-The module publishes its services some time after the connection is made. An Android phone
-asking straight away saw `FFF0`, `FF90` and `FFE5` but not `FFE0` ("No Services matching UUID
-0000ffe0… found"). The original app polled the service list every 500 ms, up to 20 times, before
-giving up, and an older version of it waited 3 s. The web app polls every 500 ms for up to 5 s,
-reconnects once, and then reports the services it did see. Bleak, which Home Assistant uses,
-completes discovery as part of connecting.
+On a Pixel 9, Android never lists the clock's services: nRF Connect's *Client* tab stays empty,
+and the clock drops the connection about 20 s after connecting (**observed**). Web Bluetooth
+fails the same way ("No Services matching UUID 0000ffe0…", or the web app's "dropped the
+connection"). The same clock lists every service at once to Chrome on macOS, where the web app
+logs in and sets the colour, so the module itself works. The cause is **unknown**: Android's
+cached copy of the service list, the module's handling of a newer phone's connection setup, or
+the module dropping a phone that has not logged in.
+
+The original app polled the service list every 500 ms, up to 20 times, before giving up, and an
+older version of it waited 3 s, which suggests discovery was slow on the phones of its day too.
+The web app also polls every 500 ms for up to 5 s, reconnects once, and then reports the services
+it saw, or when the clock dropped the connection. Bleak, which Home Assistant uses, completes
+discovery as part of connecting.
 
 The original app scanned with a service filter `["ffb0", "fff0"]` and then filtered on the name
 prefix. The rewritten apps filter by name only.
@@ -138,7 +147,7 @@ without the `FFC0` service skip the login.
 
 | Command | Format | Example | Effect |
 |---|---|---|---|
-| Colour | `R{rrr}-G{ggg}-B{bbb}` | `R255-G128-B000` | tube backlight colour, zero-padded decimal |
+| Colour | `R{ggg}-G{rrr}-B{bbb}` | `R128-G255-B000` (orange) | tube backlight colour, zero-padded decimal; **red and green swapped** (see *Colour*) |
 | Toggle | `S{id}{0\|1}` | `S81` | switch a setting (table below) |
 | Key | `K{nn}` | `K02` | press a front-panel button (table below) |
 | Alarm 1 | `AHH:MMA` | `A07:30A` | set alarm 1 time |
@@ -172,21 +181,25 @@ rewritten apps send it hourly (Home Assistant) or every minute while the page is
 
 ### Keys
 
-The app's buttons mirror the clock's 14-key IR remote. `K01`–`K03` sit under the colour slider;
-the remote's backlight keys are *1 change colour*, *2 fixed colour* and *3 colour-change mode*, so
-these most likely step the backlight (**inferred**, unverified).
+The app's buttons mirror the clock's 14-key IR remote. `K01`–`K03` sit under the colour slider
+and drive the backlight (**observed** on an IN1204M, 2026-10-28):
 
 | Code | Button | Original UI | Remote key |
 |---|---|---|---|
-| `K01` | previous backlight colour | `<` | (backlight) |
-| `K02` | backlight mode | `M` | (backlight) |
-| `K03` | next backlight colour | `>` | (backlight) |
+| `K01` | next preset colour, and back to a steady light | `<` | (backlight) |
+| `K02` | next backlight effect | `M` | (backlight) |
+| `K03` | same as `K01`: the same presets in the same order, not the reverse | `>` | (backlight) |
 | `K04` | power | round "close" button | ON-OFF |
 | `K05` | back | "back" button | BACK |
 | `K06` | plus | `+` | + |
 | `K07` | set | `SET` | SET: opens the settings menu |
 | `K08` | OK | `OK` | OK |
 | `K09` | minus | `-` | − |
+
+`K02` steps through the effects: steady, breathing in the chosen colour, breathing through the
+colours, rainbow on all tubes together, and a rainbow with each tube a different colour (more may
+follow; whether it wraps back to steady is **unverified**). `K01` or `K03` stops any effect. The
+status frame has no field for the effect, so an app cannot read which one is running.
 
 The remote also has VOL, LIGHT, TIME, DATE and TEMP keys that the app does not send. Whether
 `K10` and up reach them is **unverified**.
@@ -211,6 +224,11 @@ project function reference table"):
 | 18 | factory reset | 11 resets |
 
 ### Colour
+
+The clock lights **green from the `R` field and red from the `G` field**; `B` is blue (**observed**
+on an IN1204M: `R255-G000-B000` shows green). The original app sent the colour unswapped, so its
+red end of the slider lit green too. The rewritten apps swap the two fields both ways, in commands
+and in status frames, so colours below are the colours the clock shows.
 
 The original slider runs from 0 to 1530 around the hue wheel, in six segments of 255. One channel
 is always 255 and another is always 0:
@@ -242,14 +260,33 @@ R000-G255-B255 S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0 A07:30AA08:15BT0
 
 | Bytes | Field | Parsing (as the original app) |
 |---|---|---|
-| 0–13 | colour `Rrrr-Gggg-Bbbb` | the three numbers |
+| 0–13 | colour `Rggg-Grrr-Bbbb` | the three numbers, red and green swapped as in the command (**inferred**) |
 | 14–61 | 16 toggles | 3rd byte of each: `0` off, anything else on |
 | 62–89 | alarm 1, alarm 2, power-on, power-off | bytes 1–5 of each: `HH:MM` |
 | 90–92 | `CSS` | terminator |
 
 The original app accepted a frame when its length was 93, it started with `R` and it ended with
-`CSS`. The rewritten parsers also reject colour channels above 255 and impossible times. Garbled
-frames are treated as missing and requested again.
+`CSS`. The rewritten parsers also reject colour channels above 255; such frames are treated as
+missing and requested again. A time field that is not a time is reported as unknown instead: an
+IN1204M sent `T44:29C` (power-off) and `TG0:84O` (power-on) for times it had never received, and
+rejecting those frames hid every other setting.
+
+### What a real IN1204M sends (2026-10-28, Chrome on macOS)
+
+- **One answer per connection.** The `OSC` sent right after logging in was answered on each of
+  three connections, about 0.7–1.6 s later. About a hundred later `OSC`s on the same connections
+  were not, including one sent alone 6 s after the first answer. The original app also sent
+  `OSC` only after logging in. Both rewritten apps therefore read the settings by reconnecting.
+- **Twice.** Each answer arrived twice, 30–60 ms apart, each copy in a single notification (so
+  Chrome on macOS negotiated an MTU above 93).
+- **The colour is scaled.** One frame read `R112-G077-B000` after the last command
+  `R255-G176-B000`: each field × 7/16, rounded. Perhaps the brightness level (**inferred** from
+  one frame).
+- **Junk in fields it never received.** Toggle `C` read `T`, and the power-on and power-off
+  times `TG0:84O` and `T44:29C`. The two copies of a frame were identical, so this is what the
+  clock held, not damage in transit. The owner had set the times (08:00 and 01:00) with the
+  original app, whose unacknowledged writes the clock often missed; set again from the web app,
+  they read back correctly.
 
 ### Reassembly
 
@@ -261,10 +298,13 @@ in a frame, so a lost or corrupted piece costs at most one frame.
 
 | Date | Clock | Confirmed |
 |---|---|---|
-| 2026-10-27 | IN1204M, `XGGF-IN1204231115.1` | advertisement (`FFF0`, `FFB0`, manufacturer data), the GATT table, slow service discovery |
+| 2026-10-27 | IN1204M, `XGGF-IN1204231115.1` | advertisement (`FFF0`, `FFB0`, manufacturer data), the GATT table |
+| 2026-10-28 | same, web app 0.1.1 in Chrome on macOS | password login; colour command (red and green swapped); `K01`–`K03`; status frame received, but rejected by 0.1.1 for its power-on and power-off times (`TG0:84O`, `T44:29C`) (the original app also showed no settings) |
+| 2026-10-28 | same, Pixel 9 (nRF Connect, web app 0.1.1) | no services discovered; disconnect about 20 s after connecting |
 
-No command has been tried on a clock yet: everything under *Commands* and *Status frame* still
-comes from the app's code and the manual.
+Everything else under *Commands*, and all of *Status frame*, still comes from the app's code and
+the manual. The tube toggles choose which tubes take the next colour (tubes left out keep theirs). Commands
+are often not taken (see open question 10), which made their effect look random.
 
 ## Open questions
 
@@ -277,10 +317,17 @@ bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the f
 3. Whether off-wheel RGB values and `R000-G000-B000` are honoured.
 4. What toggle `7` (time sync) changes on the clock, compared with a one-off `$…` push.
 5. Whether the clock sends anything unprompted (for example after a front-panel button press).
-6. Whether `K01`–`K03` are the remote's backlight keys, and whether `K10`+ exist for VOL, LIGHT,
-   TIME, DATE and TEMP.
-7. Whether toggles 5 and 6 do anything on the 4-tube models.
-8. Why one clock shows up under two addresses (`BA:03:57:4B:51:C1`, in its advertisement, and
-   `B8:8E:23:74:58:AA`, which exposed the services), whether both connect, and whether either
-   changes after unplugging the clock. To check: in nRF Connect, note the address(es) of
-   `XGGF…`, unplug the clock for 10 s, rescan and compare.
+6. Whether `K10`+ exist for VOL, LIGHT, TIME, DATE and TEMP, and the full `K02` effect cycle.
+7. What the tube toggles do exactly, which physical tube each one drives, and whether 5 and 6 do
+   anything on the 4-tube models.
+8. Whether the clock's address changes after unplugging it. To check: in nRF Connect, note the
+   address of `XGGF…`, unplug the clock for 10 s, rescan and compare.
+9. Why Android (Pixel 9) discovers no services. An HCI snoop log of one connection attempt shows
+   where discovery stalls.
+10. Why the clock ignores some commands. On 2026-10-28, written without response, six `K02`
+    (mode) presses changed the effect once and six `K04` (power) presses switched it twice,
+    with no pattern in the time since the previous write; a status frame read on reconnecting
+    showed tube 2 off after `S21`. Candidates: writes dropped between Chrome and the module, the
+    unanswered `OSC`s upsetting the clock's serial parser, or the clock missing bytes while busy.
+    The web app now writes with response when the module allows it, and no longer sends `OSC`
+    after each command.

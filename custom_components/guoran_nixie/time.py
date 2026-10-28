@@ -30,7 +30,7 @@ class GuoranTime(GuoranEntity, TimeEntity):
         self.setting = setting
 
     @property
-    def native_value(self) -> time:
+    def native_value(self) -> time | None:
         return self.coordinator.data.times[self.setting]
 
     async def async_set_value(self, value: time) -> None:

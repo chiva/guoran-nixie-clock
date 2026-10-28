@@ -1,12 +1,22 @@
 {
   "_comment": "Shared encode/decode vectors for web/protocol.js and custom_components/guoran_nixie/protocol.py. Derived from the original app's www/js/index.js; see docs/PROTOCOL.md.",
   "color": [
-    { "rgb": [255, 0, 0], "command": "R255-G000-B000" },
-    { "rgb": [0, 255, 255], "command": "R000-G255-B255" },
-    { "rgb": [7, 42, 199], "command": "R007-G042-B199" },
+    { "rgb": [255, 0, 0], "command": "R000-G255-B000" },
+    { "rgb": [0, 255, 0], "command": "R255-G000-B000" },
+    { "rgb": [0, 255, 255], "command": "R255-G000-B255" },
+    { "rgb": [7, 42, 199], "command": "R042-G007-B199" },
     { "rgb": [0, 0, 0], "command": "R000-G000-B000" }
   ],
   "color_invalid": [[256, 0, 0], [-1, 0, 0], [0, 0, 300]],
+  "tube_count": [
+    { "name": "XGGF-IN1204231115.1", "tubes": 4 },
+    { "name": "XGGF-IN1404000000.1", "tubes": 4 },
+    { "name": "XGGF-IN1206000000.1", "tubes": 6 },
+    { "name": "XGGF-IN1406000000.1", "tubes": 6 },
+    { "name": "XGGF-VFD11-4EC305", "tubes": 6 },
+    { "name": "XGGF-1234", "tubes": 6 },
+    { "name": null, "tubes": 6 }
+  ],
   "toggle": [
     { "toggle": "tube_1", "on": true, "command": "S11" },
     { "toggle": "tube_6", "on": false, "command": "S60" },
@@ -67,7 +77,7 @@
     { "position": 1400, "rgb": [255, 0, 130] }
   ],
   "status": {
-    "frame": "R000-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CCSS",
+    "frame": "R255-G000-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CCSS",
     "expected": {
       "rgb": [0, 255, 255],
       "toggles": {
@@ -96,10 +106,13 @@
       }
     }
   },
+  "status_unset_time": {
+    "frame": "R000-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BTG0:84OT44:29CCSS",
+    "times": { "alarm_1": "07:30", "alarm_2": "08:15", "power_on": null, "power_off": null }
+  },
   "status_invalid": [
     { "reason": "short", "frame": "R000-G255-B255S11CSS" },
     { "reason": "no terminator", "frame": "R000-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CXYZ" },
-    { "reason": "bad color", "frame": "R999-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CCSS" },
-    { "reason": "bad time", "frame": "R000-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A25:30AA08:15BT07:00OT23:30CCSS" }
+    { "reason": "bad color", "frame": "R999-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CCSS" }
   ]
 }

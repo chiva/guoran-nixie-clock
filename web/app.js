@@ -4,6 +4,7 @@ import { Clock, ClockAuthError } from './ble.js';
 import {
   BLACK,
   DEFAULT_PASSWORD,
+  TUBES,
   encodeColor,
   encodeKey,
   encodeTime,
@@ -12,13 +13,16 @@ import {
   hueToRgb,
   rgbToCss,
   rgbToHue,
+  tubeCount,
   validatePassword,
 } from './protocol.js';
 
 const PASSWORD_STORAGE_KEY = 'guoran-nixie.password';
 const TIME_SYNC_INTERVAL_MS = 60_000;
-const REFRESH_DELAY_MS = 800;
 const TOAST_MS = 4000;
+const LOG_LINES = 500;
+/** Bluetooth traffic, what the user did on the page, and what the page told them. */
+const LOG_MARKERS = { sent: '→', received: '←', info: '·', action: '●', message: 'i', error: '!' };
 
 const TOGGLE_LABELS = {
   time_sync: 'Phone time sync',
@@ -32,12 +36,12 @@ const TOGGLE_LABELS = {
   english_voice: 'English voice',
   sensor_switch: 'Sensor switch',
 };
-const TUBES = ['tube_1', 'tube_2', 'tube_3', 'tube_4', 'tube_5', 'tube_6'];
 const KEY_LABELS = {
   previous: ['‹', 'Previous backlight colour'],
   mode: ['M', 'Backlight mode'],
   next: ['›', 'Next backlight colour'],
-  power: ['⏻', 'Power'],
+  // Not ⏻: Android's system fonts have no glyph for it.
+  power: ['POWER', 'Power'],
   back: ['↩', 'Back'],
   plus: ['+', 'Plus'],
   set: ['SET', 'Set'],
@@ -54,9 +58,9 @@ const TIME_LABELS = {
 const clock = new Clock();
 const $ = (selector) => document.querySelector(selector);
 const pad = (value) => String(value).padStart(2, '0');
+const clockTime = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 
 let status = null;
-let refreshTimer = null;
 let toastTimer = null;
 let pendingColor = null;
 let colorInFlight = false;
@@ -125,6 +129,7 @@ function toast(message, { error = false } = {}) {
   const node = $('#toast');
   node.textContent = message;
   node.classList.toggle('error', error);
+  logEntry(error ? 'error' : 'message', message);
   node.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (node.hidden = true), TOAST_MS);
@@ -146,6 +151,14 @@ function renderConnection() {
   $('#controls').disabled = !connected;
   $('#connect').textContent = connected ? 'Disconnect' : 'Connect';
   $('#device-line').textContent = connected ? `Connected to ${clock.name}` : clock.name ? `${clock.name} · disconnected` : 'Not connected';
+  renderTubes();
+}
+
+/** Only the tubes this model has: a 4-tube clock has no use for switches 5 and 6. */
+function renderTubes() {
+  const count = tubeCount(clock.name);
+  $('#tubes').style.setProperty('--tubes', count);
+  $('#tubes').querySelectorAll('.tube').forEach((tube, index) => (tube.hidden = index >= count));
 }
 
 function renderColor(rgb) {
@@ -157,25 +170,58 @@ function renderColor(rgb) {
   if (position !== null) $('#hue').value = String(position);
 }
 
+/** Until the clock reports its settings, a switch's position would be a guess: show it as unknown. */
+function renderUnread() {
+  $('#unread').hidden = false;
+  $('#controls').classList.add('unread');
+  for (const input of document.querySelectorAll('[data-toggle]')) input.indeterminate = true;
+}
+
+function logEntry(kind, text) {
+  const log = $('#log');
+  const now = new Date();
+  const stamp = `${clockTime(now)}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+  log.append(`${stamp} ${LOG_MARKERS[kind]} ${text}\n`);
+  while (log.childNodes.length > LOG_LINES) log.firstChild.remove();
+  log.scrollTop = log.scrollHeight;
+}
+
+/** How the log names a control: its accessible name, else its row's text, else its own. */
+function controlName(control) {
+  const name = control.getAttribute('aria-label') || control.closest('label')?.textContent || control.textContent;
+  return name.replace(/\s+/g, ' ').trim();
+}
+
+/** The new value of a changed input, as the log shows it; nothing for the password. */
+function controlValue(input) {
+  if (input.type === 'checkbox') return input.checked ? 'on' : 'off';
+  if (input.type === 'time') return input.value || 'cleared';
+  if (input.id === 'hue') return rgbToCss(hueToRgb(Number(input.value)));
+  return null;
+}
+
+function logAction(control, value = null) {
+  logEntry('action', value === null ? controlName(control) : `${controlName(control)}: ${value}`);
+}
+
 function render(next) {
   status = next;
+  $('#unread').hidden = true;
+  $('#controls').classList.remove('unread');
   renderColor(next.rgb);
-  for (const input of document.querySelectorAll('[data-toggle]')) input.checked = next.toggles[input.dataset.toggle];
+  for (const input of document.querySelectorAll('[data-toggle]')) {
+    input.indeterminate = false;
+    input.checked = next.toggles[input.dataset.toggle];
+  }
   for (const input of document.querySelectorAll('[data-setting]')) {
-    if (document.activeElement !== input) input.value = next.times[input.dataset.setting];
+    if (document.activeElement !== input) input.value = next.times[input.dataset.setting] ?? '';
   }
   $('#updated').textContent = `Read at ${new Date().toLocaleTimeString()}`;
 }
 
-/** Read the settings back shortly after a change, to show what the clock actually kept. */
-function scheduleRefresh() {
-  clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => run(() => clock.requestStatus()), REFRESH_DELAY_MS);
-}
-
-async function command(text) {
-  await run(() => clock.send(text));
-  scheduleRefresh();
+/** No read-back: the clock answers a status request only right after connecting. */
+function command(text) {
+  return run(() => clock.send(text));
 }
 
 /** Slider drags fire many events: send the latest colour only, one write at a time. */
@@ -192,7 +238,6 @@ async function sendColor(rgb) {
   } finally {
     colorInFlight = false;
   }
-  scheduleRefresh();
 }
 
 function currentPassword() {
@@ -207,6 +252,17 @@ async function toggleConnection() {
     clock.disconnect();
     return;
   }
+  await openSession((password) => clock.connect(password));
+}
+
+/** The clock reports its settings only right after connecting: reading them again reconnects. */
+async function readSettings() {
+  disconnectRequested = clock.connected;
+  await openSession((password) => clock.reconnect(password));
+}
+
+/** Connect (with `open`), then show the clock's settings. */
+async function openSession(open) {
   let password;
   try {
     password = currentPassword();
@@ -219,13 +275,20 @@ async function toggleConnection() {
   $('#connect').disabled = true;
   $('#device-line').textContent = 'Connecting…';
   try {
-    await clock.connect(password);
+    await open(password);
+    status = null;
+    renderUnread();
     renderConnection();
-    await clock.requestStatus();
     toast(`Connected to ${clock.name}`);
+    await clock.requestStatus().catch((error) => {
+      toast(`Connected, but the clock did not send its settings (${error.message})`, { error: true });
+    });
   } catch (error) {
     if (error.name === 'NotFoundError') {
       toast('No clock chosen. Close the original app or any other phone connected to the clock.');
+    } else if (error.name === 'SecurityError') {
+      // The chooser needs a fresh tap when reconnecting took too long to open it from the first.
+      toast('Tap Connect again to choose the clock.');
     } else {
       if (error instanceof ClockAuthError) $('.settings').open = true;
       toast(error.message, { error: true });
@@ -242,16 +305,23 @@ function syncTimeIfEnabled() {
 
 function tickPhoneClock() {
   const now = new Date();
-  $('#phone-time').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  $('#phone-time').textContent = clockTime(now);
 }
 
 function wireEvents() {
+  // Capture phase: the action is logged before the commands it sends, and before a handler
+  // relabels the control (Connect becomes Disconnect).
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (button) logAction(button);
+  }, true);
+  document.addEventListener('change', (event) => logAction(event.target, controlValue(event.target)), true);
   $('#connect').addEventListener('click', toggleConnection);
   $('#forget').addEventListener('click', () => {
     clock.forget();
     renderConnection();
   });
-  $('#refresh').addEventListener('click', () => run(() => clock.requestStatus()));
+  $('#refresh').addEventListener('click', readSettings);
   $('#sync-now').addEventListener('click', async () => {
     await run(() => clock.send(encodeTimeSync(new Date())));
     toast('Clock time set');
@@ -272,6 +342,8 @@ function wireEvents() {
   $('#controls').addEventListener('change', (event) => {
     const { toggle, setting } = event.target.dataset;
     if (toggle) {
+      // Assume the clock took it: there is no reading it back without reconnecting.
+      if (status) status.toggles[toggle] = event.target.checked;
       command(encodeToggle(toggle, event.target.checked));
       if (toggle === 'time_sync' && event.target.checked) run(() => clock.send(encodeTimeSync(new Date())));
     } else if (setting && event.target.value) {
@@ -280,6 +352,16 @@ function wireEvents() {
     }
   });
   clock.addEventListener('status', (event) => render(event.detail));
+  clock.addEventListener('traffic', ({ detail }) => logEntry(detail.direction, detail.text));
+  $('#clear-log').addEventListener('click', () => ($('#log').textContent = ''));
+  $('#copy-log').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('#log').textContent);
+      toast('Log copied');
+    } catch (error) {
+      toast(`Could not copy the log: ${error.message}`, { error: true });
+    }
+  });
   clock.addEventListener('disconnected', () => {
     renderConnection();
     if (!disconnectRequested) toast('The clock disconnected');

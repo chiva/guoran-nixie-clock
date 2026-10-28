@@ -8,6 +8,7 @@ import pytest
 
 from custom_components.guoran_nixie.protocol import (
     STATUS_LENGTH,
+    TUBES,
     AuthResult,
     AuthResultError,
     Key,
@@ -24,11 +25,21 @@ from custom_components.guoran_nixie.protocol import (
     hue_to_rgb,
     parse_auth_result,
     parse_status,
+    tube_count,
 )
 
 from .conftest import VECTORS
 
 STATUS = VECTORS["status"]
+
+
+def test_tubes_are_the_backlight_toggles_of_the_largest_models() -> None:
+    assert [tube.value for tube in TUBES] == [f"tube_{n}" for n in range(1, 7)]
+
+
+@pytest.mark.parametrize("vector", VECTORS["tube_count"], ids=lambda v: str(v["name"]))
+def test_tube_count_from_the_advertised_name(vector: dict) -> None:
+    assert tube_count(vector["name"]) == vector["tubes"]
 
 
 @pytest.mark.parametrize("vector", VECTORS["color"], ids=lambda v: v["command"])
@@ -110,6 +121,14 @@ def test_parse_status() -> None:
     assert {
         setting.value: value.strftime("%H:%M") for setting, value in status.times.items()
     } == expected["times"]
+
+
+def test_parse_status_reports_a_time_field_that_is_not_a_time_as_unknown() -> None:
+    vector = VECTORS["status_unset_time"]
+    status = parse_status(vector["frame"])
+    assert {
+        setting.value: value and value.strftime("%H:%M") for setting, value in status.times.items()
+    } == vector["times"]
 
 
 @pytest.mark.parametrize("vector", VECTORS["status_invalid"], ids=lambda v: v["reason"])

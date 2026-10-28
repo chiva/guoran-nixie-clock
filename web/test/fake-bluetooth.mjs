@@ -34,7 +34,7 @@ const DISCOVERY_ORDER = [
   AUTH_SERVICE,
   uuid16(0x180a),
 ];
-/** While discovery lags, FFF0, FF90 and FFE5 are known but not FFE0: the error seen on a phone. */
+/** While discovery lags, FFF0, FF90 and FFE5 are known but not FFE0. */
 const LAGGING_DISCOVERY = 3;
 
 const COMMAND = /^(R\d{3}-G\d{3}-B\d{3}|S[0-9A-F][01]|K0[1-9]|[AT]\d{2}:\d{2}[ABOC]|\$\d{4}-\d{2}-\d{2};\d{2}:\d{2}:\d{2};0[0-6]|OSC)/;
@@ -71,6 +71,9 @@ export class FakeClock extends EventTarget {
   toggles = Object.fromEntries(TOGGLES.map((toggle) => [toggle, false]));
   times = Object.fromEntries(TIME_SETTINGS.map((setting) => [setting, '07:00']));
   ignoreStatusRequests = 0;
+  /** As a real IN1204M: only the first status request of each connection gets an answer. */
+  statusOncePerConnection = false;
+  #statusAnswered = false;
   garbleStatusReplies = 0;
   commands = [];
   authWrites = [];
@@ -83,6 +86,12 @@ export class FakeClock extends EventTarget {
   discoveryLagPolls = 0;
   /** Connections, from the first, whose discovery never completes. */
   brokenDiscoveryConnections = 0;
+  /** Connections, from the first, that the clock drops before any service is discovered, as a
+   * Pixel 9 saw: no services at all, then a disconnect about 20 s in. */
+  droppedDiscoveryConnections = 0;
+  /** As Chrome on macOS after a disconnect: the device left Chrome's cache, so connecting fails
+   * until the chooser scans for it again. */
+  outOfRange = false;
   discoveryPolls = 0;
   #polls = 0;
   #uart = '';
@@ -99,10 +108,12 @@ export class FakeClock extends EventTarget {
     this.gatt = {
       connected: false,
       async connect() {
+        if (clock.outOfRange) throw new DOMException('Bluetooth Device is no longer in range.', 'NetworkError');
         clock.connections += 1;
         clock.gatt.connected = true;
         clock.#uart = '';
         clock.#polls = 0;
+        clock.#statusAnswered = false;
         return clock.gatt;
       },
       disconnect() {
@@ -115,6 +126,10 @@ export class FakeClock extends EventTarget {
       async getPrimaryServices() {
         clock.discoveryPolls += 1;
         clock.#polls += 1;
+        if (clock.connections <= clock.droppedDiscoveryConnections) {
+          clock.gatt.disconnect();
+          throw new DOMException('GATT Server is disconnected', 'NetworkError');
+        }
         const lagging = clock.connections <= clock.brokenDiscoveryConnections || clock.#polls <= clock.discoveryLagPolls;
         const discovered = lagging ? DISCOVERY_ORDER.slice(0, LAGGING_DISCOVERY) : DISCOVERY_ORDER;
         const allowed = new Set(clock.lastRequest?.optionalServices ?? []);
@@ -136,6 +151,7 @@ export class FakeClock extends EventTarget {
       requestDevice: async (options) => {
         this.chooserShown += 1;
         this.lastRequest = options;
+        this.outOfRange = false;
         return this;
       },
     };
@@ -181,7 +197,11 @@ export class FakeClock extends EventTarget {
   #apply(command) {
     this.commands.push(command);
     if (command === STATUS_REQUEST) this.#answerStatus();
-    else if (command.startsWith('R')) this.rgb = command.match(/\d{3}/g).map(Number);
+    else if (command.startsWith('R')) {
+      // The colour the LEDs show: the clock lights green from "R" and red from "G".
+      const [rField, gField, bField] = command.match(/\d{3}/g).map(Number);
+      this.rgb = [gField, rField, bField];
+    }
     else if (command.startsWith('S')) {
       this.toggles[TOGGLES['1234567890ABCDEF'.indexOf(command[1])]] = command[2] === '1';
     } else if (command.startsWith('A') || command.startsWith('T')) {
@@ -196,6 +216,8 @@ export class FakeClock extends EventTarget {
       this.ignoreStatusRequests -= 1;
       return;
     }
+    if (this.statusOncePerConnection && this.#statusAnswered) return;
+    this.#statusAnswered = true;
     let frame = this.statusFrame();
     if (this.garbleStatusReplies > 0) {
       this.garbleStatusReplies -= 1;

@@ -73,6 +73,9 @@ class FakeServices:
         return self.characteristics.get(uuid)
 
 
+UNSET_TIME = "44:29"
+
+
 @dataclass
 class FakeClock:
     password: str = DEFAULT_PASSWORD
@@ -82,8 +85,12 @@ class FakeClock:
     times: dict[TimeSetting, time] = field(
         default_factory=lambda: dict.fromkeys(TimeSetting, time(7, 0))
     )
+    unset_times: set[TimeSetting] = field(default_factory=set)
+    """Times the clock reports as `UNSET_TIME`, as a real one did for a never-set power-off time."""
     ignore_status_requests: int = 0
     """Status requests to leave unanswered, as a flaky link would."""
+    status_once_per_connection: bool = True
+    """As a real IN1204M: only the first status request of each connection gets an answer."""
     garble_status_replies: int = 0
     """Status replies to corrupt (a valid frame shape with nonsense fields)."""
     refuse_connections: bool = False
@@ -95,6 +102,7 @@ class FakeClock:
     connected: bool = False
     ble_device_callback: Callable[[], Any] | None = None
     _uart: str = ""
+    _status_answered: bool = False
     _notify: dict[str, Callable[[Any, bytearray], None]] = field(default_factory=dict)
     _disconnected_callback: Callable[[Any], None] | None = None
 
@@ -112,6 +120,7 @@ class FakeClock:
         self.connections += 1
         self.connected = True
         self._uart = ""
+        self._status_answered = False
         self._notify = {}
         self._disconnected_callback = disconnected_callback
         self.ble_device_callback = _kwargs.get("ble_device_callback")
@@ -164,9 +173,15 @@ class FakeClock:
         return (
             encode_color(self.rgb)
             + "".join(encode_toggle(toggle, self.toggles[toggle]) for toggle in Toggle)
-            + "".join(encode_time(setting, self.times[setting]) for setting in TimeSetting)
+            + "".join(self._time_field(setting) for setting in TimeSetting)
             + STATUS_TERMINATOR
         )
+
+    def _time_field(self, setting: TimeSetting) -> str:
+        if setting not in self.unset_times:
+            return encode_time(setting, self.times[setting])
+        prefix, suffix = TIME_FORMATS[setting]
+        return f"{prefix}{UNSET_TIME}{suffix}"
 
     # The module and the clock's firmware
     def _on_auth_write(self, payload: str) -> None:
@@ -194,7 +209,8 @@ class FakeClock:
 
     def _apply(self, kind: str, match: re.Match[str]) -> None:
         if kind == "color":
-            self.rgb = (int(match[1]), int(match[2]), int(match[3]))
+            # The colour the LEDs show: the clock lights green from "R" and red from "G".
+            self.rgb = (int(match[2]), int(match[1]), int(match[3]))
         elif kind == "toggle":
             toggle = next(t for t, char in TOGGLE_IDS.items() if char == match[1])
             self.toggles[toggle] = match[2] == "1"
@@ -209,6 +225,9 @@ class FakeClock:
         if self.ignore_status_requests:
             self.ignore_status_requests -= 1
             return
+        if self.status_once_per_connection and self._status_answered:
+            return
+        self._status_answered = True
         frame = self.status_frame()
         if self.garble_status_replies:
             self.garble_status_replies -= 1

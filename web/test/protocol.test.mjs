@@ -10,6 +10,7 @@ import {
   StatusAssembler,
   StatusFrameError,
   TOGGLES,
+  TUBES,
   chunked,
   encodeAuth,
   encodeColor,
@@ -21,10 +22,20 @@ import {
   parseAuthResult,
   parseStatus,
   rgbToHue,
+  tubeCount,
 } from '../protocol.js';
 
 const FRAME = vectors.status.frame;
 const split = (text, size) => chunked(new TextEncoder().encode(text), size);
+
+describe('tubes', () => {
+  it('has one backlight toggle per tube of the largest models', () => {
+    assert.deepEqual(TUBES, ['tube_1', 'tube_2', 'tube_3', 'tube_4', 'tube_5', 'tube_6']);
+  });
+  for (const { name, tubes } of vectors.tube_count) {
+    it(`${name} has ${tubes} tubes`, () => assert.equal(tubeCount(name), tubes));
+  }
+});
 
 describe('encoders', () => {
   for (const { rgb, command } of vectors.color) {
@@ -104,6 +115,10 @@ describe('hue slider', () => {
 describe('status frames', () => {
   it('parses every field', () => {
     assert.deepEqual(parseStatus(FRAME), vectors.status.expected);
+  });
+  it('reports a time field that is not a time as unknown instead of rejecting the frame', () => {
+    const { frame, times } = vectors.status_unset_time;
+    assert.deepEqual(parseStatus(frame).times, times);
   });
   for (const { reason, frame } of vectors.status_invalid) {
     it(`rejects a frame: ${reason}`, () => assert.throws(() => parseStatus(frame), StatusFrameError));

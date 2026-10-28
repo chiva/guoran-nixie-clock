@@ -29,7 +29,7 @@ type GuoranConfigEntry = ConfigEntry[GuoranCoordinator]
 
 
 class GuoranCoordinator(DataUpdateCoordinator[ClockStatus]):
-    """One clock: its last status frame, refreshed every scan interval and after each command."""
+    """One clock: its last status frame, refreshed every scan interval."""
 
     config_entry: GuoranConfigEntry
 
@@ -49,9 +49,11 @@ class GuoranCoordinator(DataUpdateCoordinator[ClockStatus]):
 
     async def _async_update_data(self) -> ClockStatus:
         try:
+            # Status first: reading it opens a new connection, which the time sync then reuses.
+            status = await self.client.async_fetch_status()
             if self.sync_time and self._time_sync_due():
                 await self._send_time()
-            return await self.client.async_fetch_status()
+            return status
         except GuoranAuthError as err:
             raise ConfigEntryAuthFailed(
                 translation_domain=DOMAIN,
@@ -72,11 +74,14 @@ class GuoranCoordinator(DataUpdateCoordinator[ClockStatus]):
             ) from err
 
     async def async_command(self, command: str, expected: ClockStatus | None = None) -> None:
-        """Send a command; show `expected` straight away, then confirm with a refresh."""
+        """Send a command and show `expected` straight away.
+
+        Not read back: the clock reports its settings only on a new connection, and reconnecting
+        after every command would make each one take seconds. The next poll confirms it.
+        """
         await self._run(self.client.async_send(command))
         if expected is not None:
             self.async_set_updated_data(expected)
-        await self.async_request_refresh()
 
     async def async_sync_time(self) -> None:
         await self._run(self._send_time())

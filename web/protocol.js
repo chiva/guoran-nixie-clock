@@ -63,6 +63,20 @@ export const TOGGLES = Object.freeze([
   'auto_brightness', 'hour_12', 'ambient_light', 'hourly_chime', 'english_voice', 'sensor_switch',
 ]);
 
+/** One backlight toggle per tube, as many as the 6-tube models have. */
+export const TUBES = Object.freeze(TOGGLES.filter((toggle) => toggle.startsWith('tube_')));
+
+const MODEL_TUBES = /^XGGF-IN1[24]0([46])/;
+
+/**
+ * How many tubes a clock has, from its advertised name: "XGGF-IN1204…" is an IN1204M, with 4
+ * (inferred from one clock's name). Any other name gets all of them, so no tube goes missing.
+ */
+export function tubeCount(name) {
+  const match = MODEL_TUBES.exec(name ?? '');
+  return match ? Number(match[1]) : TUBES.length;
+}
+
 /** The character after "S" in each toggle command. */
 export const TOGGLE_IDS = Object.freeze(
   Object.fromEntries(TOGGLES.map((toggle, index) => [toggle, '1234567890ABCDEF'[index]])),
@@ -96,14 +110,20 @@ function requireMember(collection, value, what) {
   if (!collection.includes(value)) throw new RangeError(`unknown ${what}: ${value}`);
 }
 
-/** [0, 255, 255] → "R000-G255-B255". */
-export function encodeColor([red, green, blue]) {
-  for (const channel of [red, green, blue]) {
+/** The clock lights green from the "R" field and red from the "G" field (observed on an
+ * IN1204M; the original app sent them unswapped, so its slider showed the wrong colours too).
+ * Swapping is its own inverse: it turns a colour into the fields, and the fields into a colour. */
+const swapRedGreen = ([first, second, third]) => [second, first, third];
+
+/** Red [255, 0, 0] → "R000-G255-B000": see swapRedGreen. */
+export function encodeColor(rgb) {
+  for (const channel of rgb) {
     if (!Number.isInteger(channel) || channel < 0 || channel > CHANNEL_MAX) {
-      throw new RangeError(`colour channels must be 0…${CHANNEL_MAX}: ${[red, green, blue]}`);
+      throw new RangeError(`colour channels must be 0…${CHANNEL_MAX}: ${rgb}`);
     }
   }
-  return `R${pad(red, 3)}-G${pad(green, 3)}-B${pad(blue, 3)}`;
+  const [r, g, b] = swapRedGreen(rgb).map((channel) => pad(channel, 3));
+  return `R${r}-G${g}-B${b}`;
 }
 
 export function encodeToggle(toggle, on) {
@@ -116,11 +136,14 @@ export function encodeKey(key) {
   return KEY_CODES[key];
 }
 
+const MAX_HOUR = 23;
+const MAX_MINUTE = 59;
+
 /** Alarm 1 at 07:05 → "A07:05A"; power-off at 18:30 → "T18:30C". */
 export function encodeTime(setting, hour, minute) {
   requireMember(TIME_SETTINGS, setting, 'time setting');
   const valid = (value, max) => Number.isInteger(value) && value >= 0 && value <= max;
-  if (!valid(hour, 23) || !valid(minute, 59)) throw new RangeError(`not a time: ${hour}:${minute}`);
+  if (!valid(hour, MAX_HOUR) || !valid(minute, MAX_MINUTE)) throw new RangeError(`not a time: ${hour}:${minute}`);
   const [prefix, suffix] = TIME_FORMATS[setting];
   return `${prefix}${pad(hour)}:${pad(minute)}${suffix}`;
 }
@@ -193,7 +216,9 @@ const TIMES_START = COLOR_LENGTH + TOGGLES.length * TOGGLE_LENGTH;
 
 /**
  * Decode a complete status frame: the clock's settings written as the commands that would set
- * them (R…-G…-B…, sixteen S<id><0|1>, four times) and closed by "CSS". Times come back "HH:MM".
+ * them (R…-G…-B…, sixteen S<id><0|1>, four times) and closed by "CSS". Times come back "HH:MM",
+ * or null for one that is not a time: an IN1204M sent "T44:29C" and "TG0:84O" for times it had
+ * never received.
  */
 export function parseStatus(frame) {
   if (
@@ -204,10 +229,11 @@ export function parseStatus(frame) {
     throw new StatusFrameError(`not a status frame: ${JSON.stringify(frame)}`);
   }
   const color = COLOR_FIELD.exec(frame.slice(0, COLOR_LENGTH));
-  const rgb = color ? color.slice(1).map(Number) : [];
-  if (rgb.length !== 3 || rgb.some((channel) => channel > CHANNEL_MAX)) {
+  const fields = color ? color.slice(1).map(Number) : [];
+  if (fields.length !== 3 || fields.some((channel) => channel > CHANNEL_MAX)) {
     throw new StatusFrameError(`bad colour field: ${frame.slice(0, COLOR_LENGTH)}`);
   }
+  const rgb = swapRedGreen(fields);
   const toggles = {};
   TOGGLES.forEach((toggle, index) => {
     // As the original app: the third character, "0" for off and anything else for on.
@@ -218,10 +244,8 @@ export function parseStatus(frame) {
     const start = TIMES_START + index * TIME_LENGTH;
     const field = frame.slice(start, start + TIME_LENGTH);
     const match = TIME_FIELD.exec(field);
-    if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) {
-      throw new StatusFrameError(`bad ${setting} field: ${field}`);
-    }
-    times[setting] = `${match[1]}:${match[2]}`;
+    const valid = match && Number(match[1]) <= MAX_HOUR && Number(match[2]) <= MAX_MINUTE;
+    times[setting] = valid ? `${match[1]}:${match[2]}` : null;
   });
   return { rgb, toggles, times };
 }

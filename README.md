@@ -3,6 +3,9 @@
 Control the Guoran (果然, "点亮你的生活") Bluetooth nixie tube clock without its abandoned
 Android app. That clock is the GANXIN / diym.vip IN1204M, its IN1404M, IN1206M and IN1406M
 siblings, and any other clock advertising as `XGGF…` that the original `guoran.apk` could drive.
+
+![The IN1204M: four IN-12 nixie tubes in a walnut case on brass feet, showing 17:09](docs/images/in1204m.jpg)
+
 This repository has three parts:
 
 - **[Web app](web/)**: an English replacement for the phone app. It runs in Chrome on Android,
@@ -20,10 +23,11 @@ The original app is not included here; the vendor still hosts it at
 
 The APK is a 2019-era DCloud HTML5+ wrapper. It targets Android API 26, and its closed-source
 Bluetooth runtime predates the Android 12 permission model (`BLUETOOTH_SCAN` and
-`BLUETOOTH_CONNECT`, which the manifest does not declare), which makes it the likely culprit.
-Its scan filter (`FFF0`, `FFB0`) is not: the clock advertises exactly those services. The exact
-failure on a recent phone has not been captured. The app also asks for contacts, microphone and
-phone-state permissions it never uses.
+`BLUETOOTH_CONNECT`, which the manifest does not declare). Its scan filter (`FFF0`, `FFB0`) is
+not the problem: the clock advertises exactly those services. But the app is not the only
+problem either: on a Pixel 9, Android itself never lists the clock's services, even to nRF
+Connect (see [Service discovery on Android](docs/PROTOCOL.md#service-discovery-on-android)).
+The app also asks for contacts, microphone and phone-state permissions it never uses.
 Repackaging it would not fix the runtime, so it is replaced instead. The vendor's own manual
 admits it: *"If the clock cannot be found, it may be the compatibility problem between mobile
 phone and software, please change the mobile phone"*. The vendor's WeChat mini program 果然时钟
@@ -40,6 +44,10 @@ permission for Chrome. *Add to Home screen* installs it as an app that also open
 - The default password is 210709, the one the original app sets. It can be changed under
   *Connection settings*.
 - iPhone and iPad browsers do not support Web Bluetooth.
+- The clock reports its settings only right after connecting, so **Read clock settings**
+  reconnects. The *Bluetooth log* at the bottom shows every command and reply.
+- **Known issue:** on a Pixel 9 the connection fails because Android never lists the clock's
+  services. Chrome on macOS works with the same clock.
 
 To run it locally (`localhost` counts as a secure context):
 
@@ -78,7 +86,8 @@ original app was ever used with the clock).
   connection.
 - With *Keep the clock's time in sync* on (the default), the clock is set to Home Assistant's
   local time on the first refresh and then hourly. **Sync time now** does it on demand.
-- Commands update the entity at once, then a refresh confirms what the clock kept.
+- Commands update the entity at once. The clock reports its settings only right after a
+  connection opens, so the next refresh, which reconnects, confirms what it kept.
 - A changed password triggers a re-authentication prompt.
 
 ### Example automation

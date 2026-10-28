@@ -86,6 +86,19 @@ class Toggle(StrEnum):
     SENSOR_SWITCH = "sensor_switch"
 
 
+TUBES: Final = tuple(toggle for toggle in Toggle if toggle.startswith("tube_"))
+"""One backlight toggle per tube, as many as the 6-tube models have."""
+
+_MODEL_TUBES = re.compile(r"XGGF-IN1[24]0([46])")
+
+
+def tube_count(name: str | None) -> int:
+    """How many tubes a clock has, from its advertised name: `XGGF-IN1204…` is an IN1204M, with 4
+    (inferred from one clock's name). Any other name gets all of them, so no tube goes missing."""
+    match = _MODEL_TUBES.match(name or "")
+    return int(match[1]) if match else len(TUBES)
+
+
 TOGGLE_IDS: Final[Mapping[Toggle, str]] = MappingProxyType(
     dict(zip(Toggle, "1234567890ABCDEF", strict=True))
 )
@@ -154,7 +167,8 @@ class ClockStatus:
 
     rgb: RGB
     toggles: Mapping[Toggle, bool]
-    times: Mapping[TimeSetting, time]
+    #: None for a time field that is not a time (see `parse_status`).
+    times: Mapping[TimeSetting, time | None]
 
     def with_rgb(self, rgb: RGB) -> ClockStatus:
         return replace(self, rgb=rgb)
@@ -166,12 +180,21 @@ class ClockStatus:
         return replace(self, times=MappingProxyType({**self.times, setting: value}))
 
 
+def _swap_red_green(rgb: RGB) -> RGB:
+    """The clock lights green from the "R" field and red from the "G" field (observed on an
+    IN1204M; the original app sent them unswapped, so its slider showed the wrong colours too).
+    Swapping is its own inverse: it turns a colour into the fields, and the fields into a colour.
+    """
+    first, second, third = rgb
+    return (second, first, third)
+
+
 def encode_color(rgb: RGB) -> str:
-    """`(0, 255, 255)` → `R000-G255-B255`."""
+    """Red `(255, 0, 0)` → `R000-G255-B000`: see `_swap_red_green`."""
     if any(not 0 <= channel <= CHANNEL_MAX for channel in rgb):
         raise ValueError(f"colour channels must be 0…{CHANNEL_MAX}: {rgb}")
-    red, green, blue = rgb
-    return f"R{red:03d}-G{green:03d}-B{blue:03d}"
+    r_field, g_field, b_field = _swap_red_green(rgb)
+    return f"R{r_field:03d}-G{g_field:03d}-B{b_field:03d}"
 
 
 def encode_toggle(toggle: Toggle, on: bool) -> str:
@@ -241,9 +264,23 @@ _TOGGLES_START: Final = _COLOR_LENGTH
 _TIMES_START: Final = _TOGGLES_START + len(Toggle) * _TOGGLE_LENGTH
 
 
+def _parse_time(field: str) -> time | None:
+    match = _TIME_FIELD.fullmatch(field)
+    if not match:
+        return None
+    try:
+        return time(int(match[1]), int(match[2]))
+    except ValueError:
+        return None
+
+
 def parse_status(frame: str) -> ClockStatus:
     """Decode a complete status frame: the clock's current settings, written as the commands that
-    would set them (`R…-G…-B…`, sixteen `S<id><0|1>`, four times) and closed by `CSS`."""
+    would set them (`R…-G…-B…`, sixteen `S<id><0|1>`, four times) and closed by `CSS`.
+
+    A time field that is not a time is None: an IN1204M sent `T44:29C` and `TG0:84O` for times
+    it had never received.
+    """
     if (
         len(frame) != STATUS_LENGTH
         or not frame.startswith(STATUS_PREFIX)
@@ -254,9 +291,10 @@ def parse_status(frame: str) -> ClockStatus:
     color = _COLOR_FIELD.fullmatch(frame[:_COLOR_LENGTH])
     if not color:
         raise StatusFrameError(f"bad colour field: {frame[:_COLOR_LENGTH]!r}")
-    rgb: RGB = (int(color[1]), int(color[2]), int(color[3]))
-    if any(channel > CHANNEL_MAX for channel in rgb):
+    fields: RGB = (int(color[1]), int(color[2]), int(color[3]))
+    if any(channel > CHANNEL_MAX for channel in fields):
         raise StatusFrameError(f"bad colour field: {frame[:_COLOR_LENGTH]!r}")
+    rgb = _swap_red_green(fields)
 
     toggles: dict[Toggle, bool] = {}
     for index, toggle in enumerate(Toggle):
@@ -264,17 +302,11 @@ def parse_status(frame: str) -> ClockStatus:
         # As the original app: the third character, "0" for off and anything else for on.
         toggles[toggle] = frame[start + 2] != "0"
 
-    times: dict[TimeSetting, time] = {}
+    times: dict[TimeSetting, time | None] = {}
     for index, setting in enumerate(TimeSetting):
         start = _TIMES_START + index * _TIME_LENGTH
         field = frame[start : start + _TIME_LENGTH]
-        match = _TIME_FIELD.fullmatch(field)
-        if not match:
-            raise StatusFrameError(f"bad {setting} field: {field!r}")
-        try:
-            times[setting] = time(int(match[1]), int(match[2]))
-        except ValueError as err:
-            raise StatusFrameError(f"bad {setting} field: {field!r}") from err
+        times[setting] = _parse_time(field)
 
     return ClockStatus(
         rgb=rgb,

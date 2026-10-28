@@ -1,17 +1,19 @@
-"""The clock's sixteen on/off settings."""
+"""The clock's sixteen on/off settings, less the tube backlights a 4-tube model lacks."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.const import EntityCategory
+from homeassistant.const import EntityCategory, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .const import DOMAIN
 from .coordinator import GuoranConfigEntry, GuoranCoordinator
-from .entity import GuoranEntity
-from .protocol import Toggle, encode_toggle
+from .entity import GuoranEntity, entity_unique_id
+from .protocol import TUBES, Toggle, encode_toggle, tube_count
 
 PARALLEL_UPDATES = 1
 
@@ -37,7 +39,17 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
-    async_add_entities(GuoranSwitch(coordinator, toggle) for toggle in Toggle)
+    # The advertised name tells the model; the entry's title is only a fallback, as users rename it.
+    missing = TUBES[tube_count(coordinator.client.name or entry.title) :]
+    registry = er.async_get(hass)
+    for toggle in missing:
+        # Created by a version that gave every clock six tubes.
+        unique_id = entity_unique_id(coordinator.client.address, toggle.value)
+        if entity_id := registry.async_get_entity_id(Platform.SWITCH, DOMAIN, unique_id):
+            registry.async_remove(entity_id)
+    async_add_entities(
+        GuoranSwitch(coordinator, toggle) for toggle in Toggle if toggle not in missing
+    )
 
 
 class GuoranSwitch(GuoranEntity, SwitchEntity):

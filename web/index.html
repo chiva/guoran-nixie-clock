@@ -44,6 +44,11 @@
   <fieldset id="controls" disabled>
     <legend class="visually-hidden">Clock controls</legend>
 
+    <p id="unread" class="notice" hidden>
+      The clock has not sent its settings, so switches and times show an unknown state (dashed)
+      until it does. A change still reaches the clock. See the Bluetooth log at the bottom.
+    </p>
+
     <section class="card">
       <h2>Backlight</h2>
       <div class="color-row">
@@ -95,6 +100,19 @@
       <span id="updated" class="muted small"></span>
     </div>
   </fieldset>
+
+  <details class="card settings">
+    <summary>Bluetooth log</summary>
+    <p class="muted small">
+      Everything that happened while this page is open: ● what you did, → sent to the clock,
+      ← received from it, i and ! messages and errors shown to you.
+    </p>
+    <pre id="log" class="log"></pre>
+    <div class="footer-row">
+      <button id="copy-log" type="button" class="ghost">Copy</button>
+      <button id="clear-log" type="button" class="ghost">Clear</button>
+    </div>
+  </details>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>

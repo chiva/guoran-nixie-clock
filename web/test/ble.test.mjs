@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
-import { Clock, ClockAuthError, ClockConnectionError } from '../ble.js';
+import { Clock, ClockAuthError, ClockConnectionError, describeBytes } from '../ble.js';
 import {
   FACTORY_PASSWORD,
   NAME_PREFIX,
@@ -63,7 +63,6 @@ describe('connect', () => {
   });
 
   it('waits for the clock to finish service discovery, and still logs in', async () => {
-    // The real module first lists FFF0, FF90 and FFE5 only: "No Services matching UUID FFE0".
     fake.discoveryLagPolls = 4;
     await clock.connect(PASSWORD);
     assert.equal(clock.connected, true);
@@ -95,6 +94,63 @@ describe('connect', () => {
     assert.deepEqual(fake.authWrites, []);
   });
 
+  it('says when the clock dropped the connection during discovery', async () => {
+    fake.droppedDiscoveryConnections = 2;
+    await assert.rejects(
+      clock.connect(PASSWORD),
+      (error) => {
+        assert.ok(error instanceof ClockConnectionError);
+        assert.match(
+          error.message,
+          /dropped the connection \d+ s after connecting, before offering services FFE0 and FFE5 \(offered: none\)/,
+        );
+        return true;
+      },
+    );
+    assert.equal(fake.connections, 2, 'one reconnect, no more');
+    assert.equal(fake.discoveryPolls, 2, 'no polling a dropped link');
+  });
+
+  it('keeps what the clock offered before it dropped the connection', async () => {
+    const LISTS_BEFORE_DROP = 2;
+    fake.brokenDiscoveryConnections = 2;
+    const discover = fake.gatt.getPrimaryServices;
+    fake.gatt.getPrimaryServices = async () => {
+      if (fake.discoveryPolls < LISTS_BEFORE_DROP) return discover();
+      fake.gatt.disconnect();
+      throw new DOMException('GATT Server is disconnected', 'NetworkError');
+    };
+    await assert.rejects(clock.connect(PASSWORD), /dropped the connection .*\(offered: FFF0, FF90, FFE5\)/);
+  });
+
+  it('opens the chooser again when Chrome has forgotten the clock', async () => {
+    let disconnects = 0;
+    clock.addEventListener('disconnected', () => (disconnects += 1));
+    await clock.connect(PASSWORD);
+    fake.gatt.disconnect();
+    fake.outOfRange = true;
+    await clock.connect(PASSWORD);
+    assert.equal(clock.connected, true);
+    assert.equal(fake.chooserShown, 2);
+    fake.gatt.disconnect();
+    assert.equal(disconnects, 2, 'the same device chosen again is not watched twice');
+  });
+
+  it('reports a clock still out of range after choosing it again', async () => {
+    await clock.connect(PASSWORD);
+    fake.gatt.disconnect();
+    fake.outOfRange = true;
+    // A chooser whose scan does not bring the clock back.
+    const requestDevice = async (options) => {
+      fake.chooserShown += 1;
+      fake.lastRequest = options;
+      return fake;
+    };
+    Object.defineProperty(globalThis, 'navigator', { value: { bluetooth: { requestDevice } }, configurable: true });
+    await assert.rejects(clock.connect(PASSWORD), (error) => error.name === 'ClockOutOfRangeError' && /no longer in range/.test(error.message));
+    assert.equal(fake.chooserShown, 2, 'the chooser opens once, not in a loop');
+  });
+
   it('reconnects to the same clock without the chooser', async () => {
     await clock.connect(PASSWORD);
     fake.gatt.disconnect();
@@ -104,6 +160,49 @@ describe('connect', () => {
     clock.forget();
     await clock.connect(PASSWORD);
     assert.equal(fake.chooserShown, 2);
+  });
+});
+
+describe('traffic log', () => {
+  const record = () => {
+    const lines = [];
+    clock.addEventListener('traffic', (event) => lines.push(`${event.detail.direction} ${event.detail.text}`));
+    return lines;
+  };
+
+  it('shows bytes as text, and anything unprintable as \\xNN', () => {
+    assert.equal(describeBytes(new TextEncoder().encode('OSC')), 'OSC');
+    assert.equal(describeBytes(Uint8Array.from([0x00, 0x52, 0x0d, 0xff])), '\\x00R\\x0d\\xff');
+  });
+
+  it('records the login without the password, commands, and every raw notification', async () => {
+    const lines = record();
+    await clock.connect(PASSWORD);
+    await clock.requestStatus();
+    console.log(lines.join('\n'));
+    assert.deepEqual(lines.slice(0, 4), [
+      'sent password login',
+      'received password answer \\x00',
+      'info command characteristic allows: writeWithoutResponse; writing without response',
+      `sent ${STATUS_REQUEST}`,
+    ]);
+    const received = lines.slice(4).map((line) => line.replace(/^received /, ''));
+    assert.equal(received.join(''), fake.statusFrame(), 'the notifications, in order, make up the frame');
+    assert.ok(received.length > 1, 'one line per notification, not per frame');
+    assert.ok(!lines.some((line) => line.includes(PASSWORD)), 'the password never reaches the log');
+  });
+
+  it('records the factory password retry', async () => {
+    fake.password = FACTORY_PASSWORD;
+    const lines = record();
+    await clock.connect(PASSWORD);
+    assert.deepEqual(lines, [
+      'sent password login',
+      'received password answer \\x01',
+      'sent password login with the factory password',
+      'received password answer \\x02',
+      'info command characteristic allows: writeWithoutResponse; writing without response',
+    ]);
   });
 });
 
@@ -120,6 +219,27 @@ describe('status', () => {
     assert.equal(status.toggles.alarm_1, true);
     assert.equal(status.times.alarm_1, '06:45');
     assert.deepEqual(await announced, status);
+  });
+
+  it('reads the settings again by reconnecting, as the clock answers only once per connection', async () => {
+    fake.statusOncePerConnection = true;
+    await clock.connect(PASSWORD);
+    await clock.requestStatus();
+    await clock.send(encodeTime('alarm_1', 6, 15));
+    await assert.rejects(clock.requestStatus(), ClockConnectionError, 'a second request on the same connection');
+
+    await clock.reconnect(PASSWORD);
+    const status = await clock.requestStatus();
+
+    assert.equal(status.times.alarm_1, '06:15');
+    assert.equal(fake.connections, 2);
+    assert.equal(fake.chooserShown, 1, 'the same clock, without the chooser');
+  });
+
+  it('connects on a reconnect while disconnected', async () => {
+    await clock.reconnect(PASSWORD);
+    assert.ok(clock.connected);
+    assert.equal(fake.connections, 1);
   });
 
   it('asks again when the reply goes missing', async () => {
@@ -167,6 +287,17 @@ describe('commands', () => {
     assert.equal(fake.toggles.tube_2, false);
   });
 
+  it('writes with response when the module allows both, and says so in the log', async () => {
+    fake.characteristics[UART_TX_CHAR].properties.write = true;
+    const lines = [];
+    clock.addEventListener('traffic', (event) => lines.push(event.detail.text));
+    await clock.connect(PASSWORD);
+    await clock.send('K02');
+    const uart = fake.writes.filter((w) => w.uuid === UART_TX_CHAR);
+    assert.deepEqual(uart.map((w) => w.withResponse), [true]);
+    assert.ok(lines.includes('command characteristic allows: write, writeWithoutResponse; writing with response'));
+  });
+
   it('sets a time the next status reports back', async () => {
     await clock.connect(PASSWORD);
     await clock.send(encodeTime('alarm_2', 5, 15), encodeTime('power_off', 23, 0));
@@ -179,7 +310,7 @@ describe('commands', () => {
     await clock.connect(PASSWORD);
     await Promise.all([clock.send('S11'), clock.send('K02'), clock.send('R255-G000-B000')]);
     assert.deepEqual(fake.commands, ['S11', 'K02', 'R255-G000-B000']);
-    assert.deepEqual(fake.rgb, [255, 0, 0]);
+    assert.deepEqual(fake.rgb, [0, 255, 0], 'the R field lights green');
   });
 
   it('spaces commands by the configured gap', async () => {
@@ -187,9 +318,8 @@ describe('commands', () => {
     await spaced.connect(PASSWORD);
     const start = performance.now();
     await spaced.send('K01', 'K02', 'K03');
-    // Timers may fire up to ~1 ms early relative to performance.now(): allow that per gap.
     const elapsed = performance.now() - start;
-    assert.ok(elapsed >= 2 * 40 - 2, `two gaps between three commands, got ${elapsed} ms`);
+    assert.ok(elapsed >= 2 * 40, `two full gaps between three commands, got ${elapsed} ms`);
     spaced.disconnect();
   });
 
