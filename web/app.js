@@ -1,15 +1,19 @@
 // The page: builds the controls, turns user input into commands, and renders status frames.
 
-import { Clock, ClockAuthError } from './ble.js';
+import { Clock, ClockAuthError, ClockDiscoveryError } from './ble.js';
 import {
   BLACK,
   DEFAULT_PASSWORD,
+  EFFECTS,
   TUBES,
+  effectAfterKey,
   encodeColor,
+  encodeEffect,
   encodeKey,
   encodeTime,
   encodeTimeSync,
   encodeToggle,
+  fullBrightness,
   hueToRgb,
   rgbToCss,
   rgbToHue,
@@ -21,6 +25,12 @@ const PASSWORD_STORAGE_KEY = 'guoran-nixie.password';
 const TIME_SYNC_INTERVAL_MS = 60_000;
 const TOAST_MS = 4000;
 const LOG_LINES = 500;
+const ANDROID = /Android/;
+/** Android lists services at the 23-byte MTU the clock asks for, then drops the clock's oversized
+ * reply (docs/PROTOCOL.md, "Service discovery on Android"); retrying cannot help. */
+const ANDROID_DISCOVERY_MESSAGE =
+  'Android cannot read this clock: the clock answers with a service list larger than it agreed to, ' +
+  'and Android discards it. Use Chrome on a computer, or Home Assistant.';
 /** Bluetooth traffic, what the user did on the page, and what the page told them. */
 const LOG_MARKERS = { sent: '→', received: '←', info: '·', action: '●', message: 'i', error: '!' };
 
@@ -37,9 +47,9 @@ const TOGGLE_LABELS = {
   sensor_switch: 'Sensor switch',
 };
 const KEY_LABELS = {
-  previous: ['‹', 'Previous backlight colour'],
-  mode: ['M', 'Backlight mode'],
-  next: ['›', 'Next backlight colour'],
+  // The remote's › (‹ does the same): the next preset colour, steady.
+  next: ['Next colour', 'Next preset backlight colour, steady'],
+  mode: ['Next effect', 'Next backlight effect'],
   // Not ⏻: Android's system fonts have no glyph for it.
   power: ['POWER', 'Power'],
   back: ['↩', 'Back'],
@@ -47,6 +57,13 @@ const KEY_LABELS = {
   set: ['SET', 'Set'],
   ok: ['OK', 'OK'],
   minus: ['−', 'Minus'],
+};
+const EFFECT_LABELS = {
+  steady: 'Steady',
+  breathing: 'Breathing',
+  color_breathing: 'Breathing through colours',
+  rainbow: 'Rainbow',
+  rainbow_per_tube: 'Rainbow, one colour per tube',
 };
 const TIME_LABELS = {
   alarm_1: 'Alarm 1',
@@ -61,6 +78,8 @@ const pad = (value) => String(value).padStart(2, '0');
 const clockTime = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 
 let status = null;
+/** The backlight effect last set from this page, null until then: the clock cannot report it. */
+let effect = null;
 let toastTimer = null;
 let pendingColor = null;
 let colorInFlight = false;
@@ -108,6 +127,7 @@ function buildControls() {
       container.append(button);
     }
   }
+  $('#effect').append(...EFFECTS.map((value) => element('option', { value, textContent: EFFECT_LABELS[value] })));
   $('#tubes').append(
     ...TUBES.map((toggle, index) => {
       const input = element('input', { type: 'checkbox' });
@@ -166,8 +186,13 @@ function renderColor(rgb) {
   const off = rgb.every((channel) => channel === 0);
   swatch.classList.toggle('off', off);
   if (!off) swatch.style.setProperty('--swatch', rgbToCss(rgb));
-  const position = rgbToHue(rgb);
+  const position = rgbToHue(fullBrightness(rgb));
   if (position !== null) $('#hue').value = String(position);
+}
+
+function renderEffect(next) {
+  effect = next;
+  $('#effect').value = effect ?? '';
 }
 
 /** Until the clock reports its settings, a switch's position would be a guess: show it as unknown. */
@@ -197,6 +222,7 @@ function controlValue(input) {
   if (input.type === 'checkbox') return input.checked ? 'on' : 'off';
   if (input.type === 'time') return input.value || 'cleared';
   if (input.id === 'hue') return rgbToCss(hueToRgb(Number(input.value)));
+  if (input.tagName === 'SELECT') return input.selectedOptions[0]?.textContent ?? null;
   return null;
 }
 
@@ -238,6 +264,18 @@ async function sendColor(rgb) {
   } finally {
     colorInFlight = false;
   }
+}
+
+/** Run an effect in the slider's colour; if it did not get through, the effect is unknown. */
+async function setEffect(next) {
+  const rgb = hueToRgb(Number($('#hue').value));
+  renderColor(rgb);
+  renderEffect(next);
+  const sent = await run(async () => {
+    await clock.send(...encodeEffect(next, rgb));
+    return true;
+  });
+  if (!sent) renderEffect(null);
 }
 
 function currentPassword() {
@@ -286,6 +324,9 @@ async function openSession(open) {
   } catch (error) {
     if (error.name === 'NotFoundError') {
       toast('No clock chosen. Close the original app or any other phone connected to the clock.');
+    } else if (error instanceof ClockDiscoveryError && !error.offered.length && ANDROID.test(navigator.userAgent)) {
+      logEntry('error', error.message);
+      toast(ANDROID_DISCOVERY_MESSAGE, { error: true });
     } else if (error.name === 'SecurityError') {
       // The chooser needs a fresh tap when reconnecting took too long to open it from the first.
       toast('Tap Connect again to choose the clock.');
@@ -337,8 +378,11 @@ function wireEvents() {
   });
   $('#controls').addEventListener('click', (event) => {
     const key = event.target.closest('[data-key]')?.dataset.key;
-    if (key) command(encodeKey(key));
+    if (!key) return;
+    command(encodeKey(key));
+    renderEffect(effectAfterKey(effect, key));
   });
+  $('#effect').addEventListener('change', (event) => setEffect(event.target.value));
   $('#controls').addEventListener('change', (event) => {
     const { toggle, setting } = event.target.dataset;
     if (toggle) {

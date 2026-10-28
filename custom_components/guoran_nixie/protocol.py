@@ -7,6 +7,7 @@ docs/fixtures/protocol-vectors.json, the same vectors web/protocol.js is tested 
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
@@ -108,9 +109,9 @@ TOGGLE_IDS: Final[Mapping[Toggle, str]] = MappingProxyType(
 class Key(StrEnum):
     """The buttons of the clock's IR remote, pressed over Bluetooth.
 
-    PREVIOUS, MODE and NEXT sit under the colour slider in the original app: by the remote's
-    layout (keys 1, 2, 3 control the backlight) they step the backlight colour and its mode
-    (inferred from the manual, unverified). The rest match the remote's ON-OFF, BACK, +, SET, OK, −.
+    PREVIOUS, MODE and NEXT sit under the colour slider in the original app. PREVIOUS and NEXT
+    both step to the next preset backlight colour and stop any effect; MODE steps to the next
+    effect (observed on an IN1204M). The rest match the remote's ON-OFF, BACK, +, SET, OK, −.
     """
 
     PREVIOUS = "previous"
@@ -127,6 +128,21 @@ class Key(StrEnum):
 KEY_CODES: Final[Mapping[Key, str]] = MappingProxyType(
     {key: f"K{index:02d}" for index, key in enumerate(Key, start=1)}
 )
+
+
+class Effect(StrEnum):
+    """Backlight effects, in the order MODE steps through them (observed on an IN1204M)."""
+
+    STEADY = "steady"
+    BREATHING = "breathing"
+    COLOR_BREATHING = "color_breathing"
+    RAINBOW = "rainbow"
+    RAINBOW_PER_TUBE = "rainbow_per_tube"
+
+
+_EFFECTS: Final = tuple(Effect)
+_STEADY_KEYS: Final = frozenset({Key.PREVIOUS, Key.NEXT})
+"""The keys that stop any effect, leaving a steady preset colour."""
 
 
 class TimeSetting(StrEnum):
@@ -205,6 +221,29 @@ def encode_key(key: Key) -> str:
     return KEY_CODES[key]
 
 
+def encode_effect(effect: Effect, rgb: RGB) -> list[str]:
+    """The commands that leave the backlight running `effect` in `rgb`.
+
+    The clock cannot report its effect, so start from a known one: NEXT stops any effect (and picks
+    a preset colour), the colour is set again, then MODE is pressed once per step from steady.
+    """
+    presses = [KEY_CODES[Key.MODE]] * _EFFECTS.index(effect)
+    return [KEY_CODES[Key.NEXT], encode_color(rgb), *presses]
+
+
+def effect_after_key(effect: Effect | None, key: Key) -> Effect | None:
+    """The effect after pressing `key` while `effect` runs (None: unknown).
+
+    MODE past the last effect is unknown: whether it wraps back to steady is unverified.
+    """
+    if key in _STEADY_KEYS:
+        return Effect.STEADY
+    if key is not Key.MODE or effect is None:
+        return effect
+    following = _EFFECTS.index(effect) + 1
+    return _EFFECTS[following] if following < len(_EFFECTS) else None
+
+
 def encode_time(setting: TimeSetting, value: time) -> str:
     """Alarm 1 at 07:05 → `A07:05A`; power-off at 18:30 → `T18:30C`."""
     prefix, suffix = TIME_FORMATS[setting]
@@ -253,6 +292,20 @@ def hue_to_rgb(position: int) -> RGB:
         (offset, 0, CHANNEL_MAX),
         (CHANNEL_MAX, 0, falling),
     )[segment]
+
+
+def full_brightness(rgb: RGB) -> RGB:
+    """The colour at full brightness: its brightest channel raised to 255.
+
+    An IN1204M reported `R112-G077-B000` after being sent `R255-G176-B000`, every channel scaled
+    down alike; scaled back, the colour is on the hue wheel again. Black stays black. Halves round
+    up, as JavaScript's Math.round in web/protocol.js.
+    """
+    peak = max(rgb)
+    if peak == 0:
+        return BLACK
+    red, green, blue = (math.floor(channel * CHANNEL_MAX / peak + 0.5) for channel in rgb)
+    return (red, green, blue)
 
 
 _COLOR_FIELD = re.compile(r"R(\d{3})-G(\d{3})-B(\d{3})")

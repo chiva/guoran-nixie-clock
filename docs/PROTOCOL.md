@@ -49,19 +49,42 @@ as a new device (**unverified**: whether it stays the same after unplugging the 
 
 ### Service discovery on Android
 
-On a Pixel 9, Android never lists the clock's services: nRF Connect's *Client* tab stays empty,
-and the clock drops the connection about 20 s after connecting (**observed**). Web Bluetooth
-fails the same way ("No Services matching UUID 0000ffe0…", or the web app's "dropped the
-connection"). The same clock lists every service at once to Chrome on macOS, where the web app
-logs in and sets the colour, so the module itself works. The cause is **unknown**: Android's
-cached copy of the service list, the module's handling of a newer phone's connection setup, or
-the module dropping a phone that has not logged in.
+On a Pixel 9 (Android 17), Android never lists the clock's services: nRF Connect's *Client* tab
+stays empty, and the connection drops within about 20 s (**observed**). Web
+Bluetooth fails the same way. The cause is the module breaking the ATT MTU rules, which Android
+enforces and macOS never puts to the test (**observed** on 2026-10-28 in an HCI snoop log of the
+Pixel and in macOS's `bluetoothd` log):
+
+1. Right after connecting, the module asks for an ATT MTU of **23** (Exchange MTU Request 23). The
+   phone answers 517, so the MTU is 23.
+2. Asked for the primary services (Read By Group Type `0x2800`, handles `0x0001`–`0xFFFF`), the
+   module answers with all nine in **one 56-byte response** (L2CAP length `0x0038`): 1800, 1801,
+   180A, FFE0 (`0x0019`–`0x001D`), FFE5 (`0x001E`–`0x0021`), FFC0 (`0x0022`–`0x0029`), FF90,
+   FFF0 and FD00 (`0x005A`–`0x005F`). That is 33 bytes over the MTU.
+3. Asked later for an MTU of 517, the module answers **252**.
+
+**Android** discovers the services on its own as soon as the link is up, before its MTU request
+goes out, so the oversized reply arrives under an MTU of 23 and is dropped: no follow-up request,
+no characteristics, and discovery "completes" with no services. Every app on the phone then gets
+that empty result (Chrome's `getPrimaryServices` returned it 4 ms after asking), and each new
+connection repeats it. Clearing the GATT cache does not help, nor does nRF Connect's *Auto request
+maximum MTU*: the MTU rises only after Android's own discovery.
+
+**macOS** answers the module's MTU 23, then immediately asks for 527 itself. ATT allows one
+outstanding request per side, so its service discovery waits behind that request; the module
+answers 252, and the 56-byte reply arrives legitimately. Every macOS connection in the log
+follows this order, so the Mac is not lucky, only first.
+
+What would work on Android, untested: a native app that connects, requests MTU 517, waits for
+the answer, clears the stale result (the hidden `BluetoothGatt.refresh()`), and discovers again.
+Web Bluetooth can do neither, so the web app explains this on Android instead of retrying.
+BlueZ and ESPHome proxies exchange the MTU before discovering services, as macOS does, so Home
+Assistant should be unaffected (**unverified**).
 
 The original app polled the service list every 500 ms, up to 20 times, before giving up, and an
-older version of it waited 3 s, which suggests discovery was slow on the phones of its day too.
-The web app also polls every 500 ms for up to 5 s, reconnects once, and then reports the services
-it saw, or when the clock dropped the connection. Bleak, which Home Assistant uses, completes
-discovery as part of connecting.
+older version of it waited 3 s. The web app also polls every 500 ms for up to 5 s, reconnects
+once, and then reports the services it saw, or when the clock dropped the connection. Bleak,
+which Home Assistant uses, completes discovery as part of connecting.
 
 The original app scanned with a service filter `["ffb0", "fff0"]` and then filtered on the name
 prefix. The rewritten apps filter by name only.
@@ -197,9 +220,16 @@ and drive the backlight (**observed** on an IN1204M, 2026-10-28):
 | `K09` | minus | `-` | − |
 
 `K02` steps through the effects: steady, breathing in the chosen colour, breathing through the
-colours, rainbow on all tubes together, and a rainbow with each tube a different colour (more may
-follow; whether it wraps back to steady is **unverified**). `K01` or `K03` stops any effect. The
-status frame has no field for the effect, so an app cannot read which one is running.
+colours, rainbow on all tubes together, and a rainbow with each tube a different colour (order
+**observed**; whether it wraps back to steady after the last is **unverified**). `K01` or `K03`
+stops any effect. The status frame has no field for the effect, so an app cannot read which one
+is running.
+
+**Choosing an effect.** With no way to read the current effect, both apps start from a known one:
+`K03` (steady, on a preset colour), the wanted colour again, then one `K02` per step from steady.
+Rainbow in red is `K03`, `R000-G255-B000`, `K02`, `K02`, `K02` (vectors under `effect` in
+[`fixtures/protocol-vectors.json`](fixtures/protocol-vectors.json)). Sent 150 ms apart, the
+longest takes under a second. Whether a later colour command stops an effect is **unverified**.
 
 The remote also has VOL, LIGHT, TIME, DATE and TEMP keys that the app does not send. Whether
 `K10` and up reach them is **unverified**.
@@ -281,7 +311,8 @@ rejecting those frames hid every other setting.
   Chrome on macOS negotiated an MTU above 93).
 - **The colour is scaled.** One frame read `R112-G077-B000` after the last command
   `R255-G176-B000`: each field × 7/16, rounded. Perhaps the brightness level (**inferred** from
-  one frame).
+  one frame). Both apps scale a reported colour back to full brightness (brightest channel 255)
+  before showing it on the slider or sending it again.
 - **Junk in fields it never received.** Toggle `C` read `T`, and the power-on and power-off
   times `TG0:84O` and `T44:29C`. The two copies of a frame were identical, so this is what the
   clock held, not damage in transit. The owner had set the times (08:00 and 01:00) with the
@@ -300,7 +331,7 @@ in a frame, so a lost or corrupted piece costs at most one frame.
 |---|---|---|
 | 2026-10-27 | IN1204M, `XGGF-IN1204231115.1` | advertisement (`FFF0`, `FFB0`, manufacturer data), the GATT table |
 | 2026-10-28 | same, web app 0.1.1 in Chrome on macOS | password login; colour command (red and green swapped); `K01`–`K03`; status frame received, but rejected by 0.1.1 for its power-on and power-off times (`TG0:84O`, `T44:29C`) (the original app also showed no settings) |
-| 2026-10-28 | same, Pixel 9 (nRF Connect, web app 0.1.1) | no services discovered; disconnect about 20 s after connecting |
+| 2026-10-28 | same, Pixel 9 (nRF Connect, web app 0.1.1) | no services discovered; disconnect about 20 s after connecting. HCI snoop log: the module's 56-byte service list under its own MTU of 23, dropped by Android (see *Service discovery on Android*) |
 
 Everything else under *Commands*, and all of *Status frame*, still comes from the app's code and
 the manual. The tube toggles choose which tubes take the next colour (tubes left out keep theirs). Commands
@@ -317,13 +348,14 @@ bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the f
 3. Whether off-wheel RGB values and `R000-G000-B000` are honoured.
 4. What toggle `7` (time sync) changes on the clock, compared with a one-off `$…` push.
 5. Whether the clock sends anything unprompted (for example after a front-panel button press).
-6. Whether `K10`+ exist for VOL, LIGHT, TIME, DATE and TEMP, and the full `K02` effect cycle.
+6. Whether `K10`+ exist for VOL, LIGHT, TIME, DATE and TEMP, and whether the `K02` effect cycle wraps.
 7. What the tube toggles do exactly, which physical tube each one drives, and whether 5 and 6 do
    anything on the 4-tube models.
 8. Whether the clock's address changes after unplugging it. To check: in nRF Connect, note the
    address of `XGGF…`, unplug the clock for 10 s, rescan and compare.
-9. Why Android (Pixel 9) discovers no services. An HCI snoop log of one connection attempt shows
-   where discovery stalls.
+9. Whether a native Android app that raises the MTU before discovering services gets the full
+   list (see *Service discovery on Android*), and whether Home Assistant through BlueZ or an
+   ESPHome proxy does.
 10. Why the clock ignores some commands. On 2026-10-28, written without response, six `K02`
     (mode) presses changed the effect once and six `K04` (power) presses switched it twice,
     with no pattern in the time since the previous write; a status frame read on reconnecting

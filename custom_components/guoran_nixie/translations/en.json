@@ -53,8 +53,8 @@
   },
   "entity": {
     "button": {
-      "key_previous": { "name": "Backlight previous colour" },
-      "key_mode": { "name": "Backlight mode" },
+      "key_previous": { "name": "Backlight next colour (left button)" },
+      "key_mode": { "name": "Backlight next effect" },
       "key_next": { "name": "Backlight next colour" },
       "key_power": { "name": "Power" },
       "key_back": { "name": "Back" },
@@ -65,7 +65,20 @@
       "sync_time": { "name": "Sync time now" }
     },
     "light": {
-      "backlight": { "name": "Backlight" }
+      "backlight": {
+        "name": "Backlight",
+        "state_attributes": {
+          "effect": {
+            "state": {
+              "steady": "Steady",
+              "breathing": "Breathing",
+              "color_breathing": "Breathing through colours",
+              "rainbow": "Rainbow",
+              "rainbow_per_tube": "Rainbow, one colour per tube"
+            }
+          }
+        }
+      }
     },
     "switch": {
       "tube_1": { "name": "Tube 1 backlight" },

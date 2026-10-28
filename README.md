@@ -8,10 +8,11 @@ siblings, and any other clock advertising as `XGGF…` that the original `guoran
 
 This repository has three parts:
 
-- **[Web app](web/)**: an English replacement for the phone app. It runs in Chrome on Android,
-  Windows, macOS, Linux or ChromeOS through Web Bluetooth, and needs no installation.
+- **[Web app](web/)**: an English replacement for the phone app. It runs in Chrome on Windows,
+  macOS, Linux or ChromeOS through Web Bluetooth, and needs no installation. Android cannot
+  read this clock (see below).
 - **[Home Assistant integration](custom_components/guoran_nixie/)**: the clock as a device with a
-  backlight light, 16 switches, 4 times and 10 buttons. It works through the local adapter or any
+  backlight light (colour and effects), 16 switches, 4 times and 10 buttons. It works through the local adapter or any
   ESPHome Bluetooth proxy.
 - **[Protocol documentation](docs/PROTOCOL.md)** and a **[capability map](docs/CAPABILITIES.md)**,
   decoded from the original app's source and cross-checked against the clock's manual.
@@ -25,8 +26,9 @@ The APK is a 2019-era DCloud HTML5+ wrapper. It targets Android API 26, and its 
 Bluetooth runtime predates the Android 12 permission model (`BLUETOOTH_SCAN` and
 `BLUETOOTH_CONNECT`, which the manifest does not declare). Its scan filter (`FFF0`, `FFB0`) is
 not the problem: the clock advertises exactly those services. But the app is not the only
-problem either: on a Pixel 9, Android itself never lists the clock's services, even to nRF
-Connect (see [Service discovery on Android](docs/PROTOCOL.md#service-discovery-on-android)).
+problem either: the clock's Bluetooth module answers with a service list larger than the packet
+size it asked for, and recent Android discards it, so even nRF Connect sees no services (see
+[Service discovery on Android](docs/PROTOCOL.md#service-discovery-on-android)).
 The app also asks for contacts, microphone and phone-state permissions it never uses.
 Repackaging it would not fix the runtime, so it is replaced instead. The vendor's own manual
 admits it: *"If the clock cannot be found, it may be the compatibility problem between mobile
@@ -36,8 +38,8 @@ is another way to reach the clock from a recent phone.
 ## Web app
 
 Open <https://chiva.github.io/guoran-nixie-clock/> in Chrome. GitHub Pages serves it over
-HTTPS, which Web Bluetooth requires. Tap **Connect**, pick the `XGGF…` clock, and Android asks for the *Nearby devices*
-permission for Chrome. *Add to Home screen* installs it as an app that also opens offline.
+HTTPS, which Web Bluetooth requires. Click **Connect** and pick the `XGGF…` clock. Chrome's
+*Install* option makes it an app that also opens offline.
 
 - Close the original app, or any other phone connected to the clock, first: the clock's module
   accepts one connection at a time.
@@ -46,8 +48,9 @@ permission for Chrome. *Add to Home screen* installs it as an app that also open
 - iPhone and iPad browsers do not support Web Bluetooth.
 - The clock reports its settings only right after connecting, so **Read clock settings**
   reconnects. The *Bluetooth log* at the bottom shows every command and reply.
-- **Known issue:** on a Pixel 9 the connection fails because Android never lists the clock's
-  services. Chrome on macOS works with the same clock.
+- **Android does not work (known issue):** the clock's oversized service list is discarded by
+  Android, and a web page cannot work around it. Use Chrome on a computer (tested on macOS) or
+  Home Assistant.
 
 To run it locally (`localhost` counts as a secure context):
 

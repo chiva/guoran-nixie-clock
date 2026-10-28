@@ -82,12 +82,40 @@ export const TOGGLE_IDS = Object.freeze(
   Object.fromEntries(TOGGLES.map((toggle, index) => [toggle, '1234567890ABCDEF'[index]])),
 );
 
-/** The IR remote's buttons; previous/mode/next step the backlight colour and mode (inferred). */
+/** The IR remote's buttons. Previous and next both step to the next preset backlight colour and
+ * stop any effect; mode steps to the next effect (observed on an IN1204M). */
 export const KEYS = Object.freeze(['previous', 'mode', 'next', 'power', 'back', 'plus', 'set', 'ok', 'minus']);
 
 export const KEY_CODES = Object.freeze(
   Object.fromEntries(KEYS.map((key, index) => [key, `K${String(index + 1).padStart(2, '0')}`])),
 );
+
+/** Backlight effects, in the order the mode key steps through them (observed on an IN1204M). */
+export const EFFECTS = Object.freeze(['steady', 'breathing', 'color_breathing', 'rainbow', 'rainbow_per_tube']);
+
+/** The keys that stop any effect, leaving a steady preset colour. */
+const STEADY_KEYS = new Set(['previous', 'next']);
+
+/**
+ * The commands that leave the backlight running `effect` in `rgb`. The clock cannot report its
+ * effect, so start from a known one: next stops any effect (and picks a preset colour), the
+ * colour is set again, then mode is pressed once per step from steady.
+ */
+export function encodeEffect(effect, rgb) {
+  requireMember(EFFECTS, effect, 'effect');
+  return [KEY_CODES.next, encodeColor(rgb), ...Array(EFFECTS.indexOf(effect)).fill(KEY_CODES.mode)];
+}
+
+/**
+ * The effect after pressing `key` while `effect` runs (null: unknown). Mode past the last effect
+ * is unknown: whether it wraps back to steady is unverified.
+ */
+export function effectAfterKey(effect, key) {
+  requireMember(KEYS, key, 'key');
+  if (STEADY_KEYS.has(key)) return EFFECTS[0];
+  if (key !== 'mode') return effect;
+  return effect === null ? null : (EFFECTS[EFFECTS.indexOf(effect) + 1] ?? null);
+}
 
 /** Times the clock stores, in the order the status frame reports them. */
 export const TIME_SETTINGS = Object.freeze(['alarm_1', 'alarm_2', 'power_on', 'power_off']);
@@ -203,6 +231,16 @@ export function rgbToHue([red, green, blue]) {
   if (green === 0 && blue === max) return 4 * HUE_SEGMENT + red;
   if (red === max && green === 0) return 5 * HUE_SEGMENT + (max - blue);
   return null;
+}
+
+/**
+ * The colour at full brightness: its brightest channel raised to 255. An IN1204M reported
+ * R112-G077-B000 after being sent R255-G176-B000, every channel scaled down alike; scaled back,
+ * the colour is on the hue wheel again. Black stays black.
+ */
+export function fullBrightness(rgb) {
+  const peak = Math.max(...rgb);
+  return peak === 0 ? [...BLACK] : rgb.map((channel) => Math.round((channel * CHANNEL_MAX) / peak));
 }
 
 export const rgbToCss = ([red, green, blue]) => `rgb(${red} ${green} ${blue})`;

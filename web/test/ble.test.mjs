@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
-import { Clock, ClockAuthError, ClockConnectionError, describeBytes } from '../ble.js';
+import { Clock, ClockAuthError, ClockConnectionError, ClockDiscoveryError, describeBytes } from '../ble.js';
 import {
   FACTORY_PASSWORD,
   NAME_PREFIX,
@@ -84,8 +84,10 @@ describe('connect', () => {
     await assert.rejects(
       clock.connect(PASSWORD),
       (error) => {
-        assert.ok(error instanceof ClockConnectionError);
+        assert.ok(error instanceof ClockDiscoveryError);
+        assert.ok(error instanceof ClockConnectionError, 'still a connection failure to callers');
         assert.match(error.message, /did not offer services FFE0 and FFE5 \(offered: FFF0, FF90, FFE5\)/);
+        assert.deepEqual(error.offered, ['FFF0', 'FF90', 'FFE5']);
         return true;
       },
     );
@@ -104,6 +106,7 @@ describe('connect', () => {
           error.message,
           /dropped the connection \d+ s after connecting, before offering services FFE0 and FFE5 \(offered: none\)/,
         );
+        assert.deepEqual(error.offered, [], 'nothing offered: what Android reports for this clock');
         return true;
       },
     );
