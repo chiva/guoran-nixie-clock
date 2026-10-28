@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/chiva/guoran-nixie-clock/compare/v0.1.2...v0.2.0) (2026-10-28)
+
+
+### Features
+
+* backlight effect picker, clearer backlight buttons, Android finding ([#7](https://github.com/chiva/guoran-nixie-clock/issues/7)) ([9597bc8](https://github.com/chiva/guoran-nixie-clock/commit/9597bc82489ef8e21cc5b27bced24ccae3673f39))
+
 ## [0.1.2](https://github.com/chiva/guoran-nixie-clock/compare/v0.1.1...v0.1.2) (2026-10-28)
 
 
