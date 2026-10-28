@@ -89,6 +89,8 @@ class FakeClock:
     """Times the clock reports as `UNSET_TIME`, as a real one did for a never-set power-off time."""
     ignore_status_requests: int = 0
     """Status requests to leave unanswered, as a flaky link would."""
+    status_once_per_connection: bool = True
+    """As a real IN1204M: only the first status request of each connection gets an answer."""
     garble_status_replies: int = 0
     """Status replies to corrupt (a valid frame shape with nonsense fields)."""
     refuse_connections: bool = False
@@ -100,6 +102,7 @@ class FakeClock:
     connected: bool = False
     ble_device_callback: Callable[[], Any] | None = None
     _uart: str = ""
+    _status_answered: bool = False
     _notify: dict[str, Callable[[Any, bytearray], None]] = field(default_factory=dict)
     _disconnected_callback: Callable[[Any], None] | None = None
 
@@ -117,6 +120,7 @@ class FakeClock:
         self.connections += 1
         self.connected = True
         self._uart = ""
+        self._status_answered = False
         self._notify = {}
         self._disconnected_callback = disconnected_callback
         self.ble_device_callback = _kwargs.get("ble_device_callback")
@@ -221,6 +225,9 @@ class FakeClock:
         if self.ignore_status_requests:
             self.ignore_status_requests -= 1
             return
+        if self.status_once_per_connection and self._status_answered:
+            return
+        self._status_answered = True
         frame = self.status_frame()
         if self.garble_status_replies:
             self.garble_status_replies -= 1

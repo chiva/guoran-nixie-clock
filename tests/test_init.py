@@ -66,10 +66,11 @@ async def test_setup_creates_one_device_with_all_entities(
     assert hass.states.get(ALARM_1).state == "off"
 
 
-async def test_first_refresh_sets_the_clock_time_then_reads_status(
+async def test_first_refresh_reads_status_then_sets_the_clock_time(
     hass: HomeAssistant, loaded_entry: MockConfigEntry, clock: FakeClock
 ) -> None:
-    assert clock.commands[:2] == [encode_time_sync(dt_util.now()), STATUS_REQUEST]
+    assert clock.commands[:2] == [STATUS_REQUEST, encode_time_sync(dt_util.now())]
+    assert clock.connections == 1, "the time sync reuses the connection the status read opened"
 
 
 async def test_time_is_synced_hourly_not_every_poll(

@@ -119,22 +119,36 @@ def test_chunked_splits_exactly() -> None:
     assert list(chunked(b"", 3)) == []
 
 
-async def test_one_connection_serves_consecutive_operations(
+async def test_commands_share_the_connection_a_status_read_opened(
     session: GuoranClient, clock: FakeClock
 ) -> None:
     await session.async_fetch_status()
     await session.async_send("K02")
-    await session.async_fetch_status()
+    await session.async_send("K03")
     assert clock.connections == 1
     assert len(clock.auth_writes) == 1
 
 
-async def test_missing_status_reply_is_requested_again(
+async def test_status_is_read_on_a_new_connection_as_the_clock_answers_only_once(
+    session: GuoranClient, clock: FakeClock
+) -> None:
+    await session.async_fetch_status()
+    await session.async_send(encode_toggle(Toggle.ALARM_2, True))
+
+    status = await session.async_fetch_status()
+
+    assert status.toggles[Toggle.ALARM_2] is True
+    assert clock.connections == 2
+    assert clock.commands == [STATUS_REQUEST, "S91", STATUS_REQUEST]
+
+
+async def test_missing_status_reply_is_requested_again_on_a_new_connection(
     session: GuoranClient, clock: FakeClock
 ) -> None:
     clock.ignore_status_requests = 1
     status = await session.async_fetch_status()
     assert clock.commands == [STATUS_REQUEST, STATUS_REQUEST]
+    assert clock.connections == 2
     assert status.rgb == clock.rgb
 
 
@@ -180,11 +194,13 @@ async def test_write_failure_is_a_connection_error(
 
 
 async def test_link_lost_while_waiting_fails_fast(session: GuoranClient, clock: FakeClock) -> None:
-    await session.async_fetch_status()
     clock.ignore_status_requests = 1
     fetch = asyncio.create_task(session.async_fetch_status())
-    await asyncio.sleep(0)
-    await asyncio.sleep(0)
+    for _ in range(100):
+        if STATUS_REQUEST in clock.commands:
+            break
+        await asyncio.sleep(0)
+    assert STATUS_REQUEST in clock.commands, "the request goes out before the link drops"
     clock.drop_connection()
 
     with pytest.raises(GuoranConnectionError, match="disconnected"):

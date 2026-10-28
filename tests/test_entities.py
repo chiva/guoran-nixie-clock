@@ -42,10 +42,10 @@ BACKLIGHT = f"light.{PREFIX}_backlight"
 
 
 def last_command(clock: FakeClock) -> str:
-    """The command a service call sent, checking it was followed by the confirming refresh."""
-    command, refresh = clock.commands[-2:]
-    assert refresh == STATUS_REQUEST
-    return command
+    """The command a service call sent, checking no status read followed it on that connection
+    (the clock answers only the first one)."""
+    assert clock.commands.count(STATUS_REQUEST) == clock.connections
+    return clock.commands[-1]
 
 
 async def _call(
