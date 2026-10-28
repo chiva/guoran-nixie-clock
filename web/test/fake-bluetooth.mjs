@@ -34,7 +34,7 @@ const DISCOVERY_ORDER = [
   AUTH_SERVICE,
   uuid16(0x180a),
 ];
-/** While discovery lags, FFF0, FF90 and FFE5 are known but not FFE0: the error seen on a phone. */
+/** While discovery lags, FFF0, FF90 and FFE5 are known but not FFE0. */
 const LAGGING_DISCOVERY = 3;
 
 const COMMAND = /^(R\d{3}-G\d{3}-B\d{3}|S[0-9A-F][01]|K0[1-9]|[AT]\d{2}:\d{2}[ABOC]|\$\d{4}-\d{2}-\d{2};\d{2}:\d{2}:\d{2};0[0-6]|OSC)/;
@@ -83,6 +83,9 @@ export class FakeClock extends EventTarget {
   discoveryLagPolls = 0;
   /** Connections, from the first, whose discovery never completes. */
   brokenDiscoveryConnections = 0;
+  /** Connections, from the first, that the clock drops before any service is discovered, as a
+   * Pixel 9 saw: no services at all, then a disconnect about 20 s in. */
+  droppedDiscoveryConnections = 0;
   discoveryPolls = 0;
   #polls = 0;
   #uart = '';
@@ -115,6 +118,10 @@ export class FakeClock extends EventTarget {
       async getPrimaryServices() {
         clock.discoveryPolls += 1;
         clock.#polls += 1;
+        if (clock.connections <= clock.droppedDiscoveryConnections) {
+          clock.gatt.disconnect();
+          throw new DOMException('GATT Server is disconnected', 'NetworkError');
+        }
         const lagging = clock.connections <= clock.brokenDiscoveryConnections || clock.#polls <= clock.discoveryLagPolls;
         const discovered = lagging ? DISCOVERY_ORDER.slice(0, LAGGING_DISCOVERY) : DISCOVERY_ORDER;
         const allowed = new Set(clock.lastRequest?.optionalServices ?? []);

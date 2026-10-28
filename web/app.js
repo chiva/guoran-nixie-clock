@@ -37,7 +37,8 @@ const KEY_LABELS = {
   previous: ['‹', 'Previous backlight colour'],
   mode: ['M', 'Backlight mode'],
   next: ['›', 'Next backlight colour'],
-  power: ['⏻', 'Power'],
+  // Not ⏻: Android's system fonts have no glyph for it.
+  power: ['POWER', 'Power'],
   back: ['↩', 'Back'],
   plus: ['+', 'Plus'],
   set: ['SET', 'Set'],

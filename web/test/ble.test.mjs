@@ -63,7 +63,6 @@ describe('connect', () => {
   });
 
   it('waits for the clock to finish service discovery, and still logs in', async () => {
-    // The real module first lists FFF0, FF90 and FFE5 only: "No Services matching UUID FFE0".
     fake.discoveryLagPolls = 4;
     await clock.connect(PASSWORD);
     assert.equal(clock.connected, true);
@@ -93,6 +92,35 @@ describe('connect', () => {
     assert.equal(fake.connections, 2);
     assert.equal(fake.gatt.connected, false);
     assert.deepEqual(fake.authWrites, []);
+  });
+
+  it('says when the clock dropped the connection during discovery', async () => {
+    fake.droppedDiscoveryConnections = 2;
+    await assert.rejects(
+      clock.connect(PASSWORD),
+      (error) => {
+        assert.ok(error instanceof ClockConnectionError);
+        assert.match(
+          error.message,
+          /dropped the connection \d+ s after connecting, before offering services FFE0 and FFE5 \(offered: none\)/,
+        );
+        return true;
+      },
+    );
+    assert.equal(fake.connections, 2, 'one reconnect, no more');
+    assert.equal(fake.discoveryPolls, 2, 'no polling a dropped link');
+  });
+
+  it('keeps what the clock offered before it dropped the connection', async () => {
+    const LISTS_BEFORE_DROP = 2;
+    fake.brokenDiscoveryConnections = 2;
+    const discover = fake.gatt.getPrimaryServices;
+    fake.gatt.getPrimaryServices = async () => {
+      if (fake.discoveryPolls < LISTS_BEFORE_DROP) return discover();
+      fake.gatt.disconnect();
+      throw new DOMException('GATT Server is disconnected', 'NetworkError');
+    };
+    await assert.rejects(clock.connect(PASSWORD), /dropped the connection .*\(offered: FFF0, FF90, FFE5\)/);
   });
 
   it('reconnects to the same clock without the chooser', async () => {

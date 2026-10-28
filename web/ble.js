@@ -27,13 +27,14 @@ import {
 const STATUS_ATTEMPTS = 2;
 /** A connection whose services are still missing after polling is dropped and opened once more. */
 const CONNECTION_ATTEMPTS = 2;
+const MS_PER_S = 1000;
 export const DEFAULT_TIMING = Object.freeze({
   authTimeoutMs: 5000,
   statusTimeoutMs: 5000,
   /** The module forwards bytes to the clock's serial port without delimiters: commands sent
    * back to back could merge into one the clock cannot parse. */
   commandGapMs: 150,
-  /** The module finishes service discovery late: the original app asked every 500 ms until the
+  /** The module may finish service discovery late: the original app asked every 500 ms until the
    * services appeared (and an older version waited 3 s), so this does the same, up to 5 s. */
   discoveryPollMs: 500,
   discoveryPolls: 10,
@@ -128,21 +129,32 @@ export class Clock extends EventTarget {
    * never does. Resolves with the services by UUID. */
   async #connectWithServices() {
     let offered = [];
+    let droppedAfterMs = null;
     for (let connection = 1; connection <= CONNECTION_ATTEMPTS; connection += 1) {
       const server = await this.#device.gatt.connect();
+      const connectedAt = performance.now();
+      droppedAfterMs = null;
       for (let poll = 1; poll <= this.#timing.discoveryPolls; poll += 1) {
         const services = new Map((await server.getPrimaryServices().catch(() => [])).map((s) => [s.uuid, s]));
         if (REQUIRED_SERVICES.every((uuid) => services.has(uuid))) return services;
-        offered = [...services.keys()];
-        if (!this.#device.gatt.connected) break;
+        // A list read after the clock dropped the link is empty: keep what it offered before.
+        if (services.size) offered = [...services.keys()];
+        if (!this.#device.gatt.connected) {
+          droppedAfterMs = performance.now() - connectedAt;
+          break;
+        }
         await sleep(this.#timing.discoveryPollMs);
       }
       this.#device.gatt.disconnect();
     }
     const found = offered.length ? offered.map(shortUuid).join(', ') : 'none';
     const needed = REQUIRED_SERVICES.map(shortUuid).join(' and ');
+    const failure =
+      droppedAfterMs === null
+        ? `did not offer services ${needed}`
+        : `dropped the connection ${Math.round(droppedAfterMs / MS_PER_S)} s after connecting, before offering services ${needed}`;
     throw new ClockConnectionError(
-      `${this.name} did not offer services ${needed} (offered: ${found}). ` +
+      `${this.name} ${failure} (offered: ${found}). ` +
         'Close any other app connected to the clock, unplug it for 10 s and try again.',
     );
   }
