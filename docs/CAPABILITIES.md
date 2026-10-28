@@ -28,7 +28,9 @@ six; see [PROTOCOL.md § Keys](PROTOCOL.md#keys).
 The same app and protocol serve the 4- and 6-tube models (on the 6-tube ones, tubes 5 and 6 show
 the seconds), which is why the protocol has six tube backlight switches. Both new apps read the
 model from the advertised name and show only tubes 1–4 on an IN1204M or IN1404M
-(`XGGF-IN1204…`, `XGGF-IN1404…`). Any other name gets all six.
+(`XGGF-IN1204…`, `XGGF-IN1404…`). Any other name gets all six. The original app showed six
+switches on every clock, and the status frame always reports six, so this rule is **inferred**
+from one clock's name (`XGGF-IN1204231115.1`), not from the app.
 
 ## Backlight
 
