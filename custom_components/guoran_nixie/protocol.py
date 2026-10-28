@@ -154,7 +154,7 @@ class ClockStatus:
 
     rgb: RGB
     toggles: Mapping[Toggle, bool]
-    #: None for a time the clock holds but no clock could show (see `parse_status`).
+    #: None for a time field that is not a time (see `parse_status`).
     times: Mapping[TimeSetting, time | None]
 
     def with_rgb(self, rgb: RGB) -> ClockStatus:
@@ -251,11 +251,22 @@ _TOGGLES_START: Final = _COLOR_LENGTH
 _TIMES_START: Final = _TOGGLES_START + len(Toggle) * _TOGGLE_LENGTH
 
 
+def _parse_time(field: str) -> time | None:
+    match = _TIME_FIELD.fullmatch(field)
+    if not match:
+        return None
+    try:
+        return time(int(match[1]), int(match[2]))
+    except ValueError:
+        return None
+
+
 def parse_status(frame: str) -> ClockStatus:
     """Decode a complete status frame: the clock's current settings, written as the commands that
     would set them (`R…-G…-B…`, sixteen `S<id><0|1>`, four times) and closed by `CSS`.
 
-    A time no clock could show is None: a never-set power-off time read `T44:29C` on an IN1204M.
+    A time field that is not a time is None: an IN1204M sent `T44:29C` and `TG0:84O` for times
+    never set.
     """
     if (
         len(frame) != STATUS_LENGTH
@@ -282,13 +293,7 @@ def parse_status(frame: str) -> ClockStatus:
     for index, setting in enumerate(TimeSetting):
         start = _TIMES_START + index * _TIME_LENGTH
         field = frame[start : start + _TIME_LENGTH]
-        match = _TIME_FIELD.fullmatch(field)
-        if not match:
-            raise StatusFrameError(f"bad {setting} field: {field!r}")
-        try:
-            times[setting] = time(int(match[1]), int(match[2]))
-        except ValueError:
-            times[setting] = None
+        times[setting] = _parse_time(field)
 
     return ClockStatus(
         rgb=rgb,

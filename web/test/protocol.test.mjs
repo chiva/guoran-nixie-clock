@@ -105,7 +105,7 @@ describe('status frames', () => {
   it('parses every field', () => {
     assert.deepEqual(parseStatus(FRAME), vectors.status.expected);
   });
-  it('reports a time no clock could show as unknown instead of rejecting the frame', () => {
+  it('reports a time field that is not a time as unknown instead of rejecting the frame', () => {
     const { frame, times } = vectors.status_unset_time;
     assert.deepEqual(parseStatus(frame).times, times);
   });

@@ -266,10 +266,10 @@ R000-G255-B255 S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0 A07:30AA08:15BT0
 | 90–92 | `CSS` | terminator |
 
 The original app accepted a frame when its length was 93, it started with `R` and it ended with
-`CSS`. The rewritten parsers also reject colour channels above 255 and malformed time fields.
-Garbled frames are treated as missing and requested again. A well-formed but impossible time is
-reported as unknown instead: an IN1204M whose power-off time had never been set sent `T44:29C`,
-and rejecting that frame hid every other setting.
+`CSS`. The rewritten parsers also reject colour channels above 255; such frames are treated as
+missing and requested again. A time field that is not a time is reported as unknown instead: an
+IN1204M sent `T44:29C` (power-off) and `TG0:84O` (power-on) for times never set, and rejecting
+those frames hid every other setting.
 
 ### Reassembly
 
@@ -282,7 +282,7 @@ in a frame, so a lost or corrupted piece costs at most one frame.
 | Date | Clock | Confirmed |
 |---|---|---|
 | 2026-10-27 | IN1204M, `XGGF-IN1204231115.1` | advertisement (`FFF0`, `FFB0`, manufacturer data), the GATT table |
-| 2026-10-28 | same, web app 0.1.1 in Chrome on macOS | password login; colour command (red and green swapped); `K01`–`K03`; status frame received, but rejected by 0.1.1 for its power-off time `T44:29C` (the original app also showed no settings) |
+| 2026-10-28 | same, web app 0.1.1 in Chrome on macOS | password login; colour command (red and green swapped); `K01`–`K03`; status frame received, but rejected by 0.1.1 for its power-on and power-off times (`TG0:84O`, `T44:29C`) (the original app also showed no settings) |
 | 2026-10-28 | same, Pixel 9 (nRF Connect, web app 0.1.1) | no services discovered; disconnect about 20 s after connecting |
 
 Everything else under *Commands*, and all of *Status frame*, still comes from the app's code and

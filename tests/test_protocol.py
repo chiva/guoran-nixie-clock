@@ -112,7 +112,7 @@ def test_parse_status() -> None:
     } == expected["times"]
 
 
-def test_parse_status_reports_a_time_no_clock_could_show_as_unknown() -> None:
+def test_parse_status_reports_a_time_field_that_is_not_a_time_as_unknown() -> None:
     vector = VECTORS["status_unset_time"]
     status = parse_status(vector["frame"])
     assert {

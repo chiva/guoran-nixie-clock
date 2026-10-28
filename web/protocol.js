@@ -203,8 +203,7 @@ const TIMES_START = COLOR_LENGTH + TOGGLES.length * TOGGLE_LENGTH;
 /**
  * Decode a complete status frame: the clock's settings written as the commands that would set
  * them (R…-G…-B…, sixteen S<id><0|1>, four times) and closed by "CSS". Times come back "HH:MM",
- * or null for one the clock holds but no clock could show (a never-set power-off time read
- * "T44:29C" on an IN1204M).
+ * or null for one that is not a time: an IN1204M sent "T44:29C" and "TG0:84O" for times never set.
  */
 export function parseStatus(frame) {
   if (
@@ -230,8 +229,7 @@ export function parseStatus(frame) {
     const start = TIMES_START + index * TIME_LENGTH;
     const field = frame.slice(start, start + TIME_LENGTH);
     const match = TIME_FIELD.exec(field);
-    if (!match) throw new StatusFrameError(`bad ${setting} field: ${field}`);
-    const valid = Number(match[1]) <= MAX_HOUR && Number(match[2]) <= MAX_MINUTE;
+    const valid = match && Number(match[1]) <= MAX_HOUR && Number(match[2]) <= MAX_MINUTE;
     times[setting] = valid ? `${match[1]}:${match[2]}` : null;
   });
   return { rgb, toggles, times };
