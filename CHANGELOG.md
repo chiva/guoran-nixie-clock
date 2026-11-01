@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/chiva/guoran-nixie-clock/compare/v0.2.0...v0.2.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **deps:** support Home Assistant 2026.10 and its probatio schemas ([#14](https://github.com/chiva/guoran-nixie-clock/issues/14)) ([ccee3c9](https://github.com/chiva/guoran-nixie-clock/commit/ccee3c9872d513640c4bd4be440e88824f802d03))
+
 ## [0.2.0](https://github.com/chiva/guoran-nixie-clock/compare/v0.1.2...v0.2.0) (2026-10-28)
 
 
