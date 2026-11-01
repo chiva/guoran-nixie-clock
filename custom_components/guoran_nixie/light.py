@@ -10,8 +10,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.light import ATTR_EFFECT, ATTR_HS_COLOR, LightEntity
-from homeassistant.components.light.const import ColorMode, LightEntityFeature
+from homeassistant.components.light import LightEntity
+from homeassistant.components.light.const import (
+    ColorMode,
+    LightEntityFeature,
+    LightEntityStateAttribute,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import color as color_util
@@ -30,6 +34,11 @@ from .protocol import (
 )
 
 PARALLEL_UPDATES = 1
+
+# The ATTR_* constants moved from light/__init__.py (2026.9) to light/const.py (2026.10); the
+# enum lives in light/const.py in both, so it keeps the declared 2026.9 minimum loading.
+ATTR_EFFECT = LightEntityStateAttribute.EFFECT
+ATTR_HS_COLOR = LightEntityStateAttribute.HS_COLOR
 
 DEGREES: float = 360
 
