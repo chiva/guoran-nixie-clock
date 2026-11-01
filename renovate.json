@@ -1,15 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:best-practices", ":semanticCommits"],
-  "enabledManagers": ["pep621", "homeassistant-manifest", "github-actions", "pre-commit"],
-  "minimumReleaseAge": "3 days",
-  "lockFileMaintenance": { "enabled": true, "schedule": ["before 4am on monday"] },
+  "extends": [
+    "local>chiva/renovate-config",
+    "local>chiva/renovate-config:ha-integration"
+  ],
+  "enabledManagers": [
+    "pep621",
+    "homeassistant-manifest",
+    "github-actions",
+    "pre-commit"
+  ],
   "packageRules": [
-    {
-      "description": "Test toolchain: pytest-homeassistant-custom-component pins Home Assistant; skip its betas.",
-      "matchPackageNames": ["pytest-homeassistant-custom-component"],
-      "groupName": "home assistant test harness"
-    },
     {
       "description": "Copies of the bluetooth and usb integrations' requirements in the pinned Home Assistant: they move with the harness, by hand, never to their own latest release.",
       "matchPackageNames": [
@@ -24,11 +25,6 @@
         "habluetooth"
       ],
       "enabled": false
-    },
-    {
-      "matchUpdateTypes": ["minor", "patch"],
-      "matchPackageNames": ["!pytest-homeassistant-custom-component"],
-      "groupName": "non-major dependencies"
     }
   ]
 }
