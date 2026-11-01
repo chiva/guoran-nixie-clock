@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import voluptuous as vol
+import probatio
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import (
     ConfigFlow,
@@ -42,8 +42,8 @@ ERROR_INVALID_AUTH = "invalid_auth"
 ERROR_INVALID_PASSWORD = "invalid_password"
 
 
-def _password_schema(default: str) -> vol.Schema:
-    return vol.Schema({vol.Required(CONF_PASSWORD, default=default): TextSelector()})
+def _password_schema(default: str) -> probatio.Schema:
+    return probatio.Schema({probatio.Required(CONF_PASSWORD, default=default): TextSelector()})
 
 
 async def _async_validate(hass: HomeAssistant, address: str, password: str) -> str | None:
@@ -130,9 +130,9 @@ class GuoranConfigFlow(ConfigFlow, domain=DOMAIN):
         clocks = {address: f"{name} ({address})" for address, name in self._discovered.items()}
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({vol.Required(CONF_ADDRESS): vol.In(clocks)}).extend(
-                _password_schema(DEFAULT_PASSWORD).schema
-            ),
+            data_schema=probatio.Schema(
+                {probatio.Required(CONF_ADDRESS): probatio.In(clocks)}
+            ).extend(_password_schema(DEFAULT_PASSWORD).schema),
             errors=errors,
         )
 
@@ -176,9 +176,9 @@ class GuoranOptionsFlow(OptionsFlowWithReload):
                 }
             )
         options = self.config_entry.options
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Required(
+                probatio.Required(
                     CONF_SCAN_INTERVAL,
                     default=options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_S),
                 ): NumberSelector(
@@ -190,7 +190,7 @@ class GuoranOptionsFlow(OptionsFlowWithReload):
                         mode=NumberSelectorMode.BOX,
                     )
                 ),
-                vol.Required(
+                probatio.Required(
                     CONF_SYNC_TIME, default=options.get(CONF_SYNC_TIME, DEFAULT_SYNC_TIME)
                 ): bool,
             }
