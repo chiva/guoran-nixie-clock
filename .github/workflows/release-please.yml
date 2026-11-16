@@ -1,8 +1,8 @@
 name: Release
 
-# release-please keeps one release PR open from the Conventional Commits merged into main. Merging
-# it tags the release, then this same run attaches the HACS zip and publishes the web app: tags
-# pushed with GITHUB_TOKEN do not trigger other workflows, so publishing cannot be tag-triggered.
+# release-please keeps one release PR open from the Conventional Commits merged into main, acting
+# through the release GitHub App so CI runs on it. Merging it tags the release, then this same run
+# attaches the HACS zip and publishes the web app, gated on release_created.
 
 on:
   push:
@@ -19,15 +19,24 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      # A GitHub App token, not GITHUB_TOKEN: GitHub starts no workflows for events made with
+      # GITHUB_TOKEN, so the release PR it opened never got its required checks.
+      - id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         id: release
         with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 

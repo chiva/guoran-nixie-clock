@@ -132,5 +132,4 @@ protocol starts there.
 `uv run pre-commit install` runs the same checks on each commit. Changes go through pull requests
 with a Conventional Commit title; CI must pass before merging. release-please collects merged
 changes into a release PR, and merging that publishes the release: the HACS zip and the web app
-on GitHub Pages. GitHub does not start CI on PRs opened by Actions, so close and reopen the release
-PR to run its checks, then approve it (the code owner's review is required) and merge.
+on GitHub Pages. The release PR runs CI like any other; merge it once the checks pass.
