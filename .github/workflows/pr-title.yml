@@ -1,7 +1,10 @@
 name: PR title
 
+# pull_request, not pull_request_target: the job only reads the PR title, which a read-only
+# token from a fork PR can do too, and GitHub is moving to block pull_request_target by default
+# (its brownouts already make this workflow fail at startup).
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, edited, synchronize, reopened]
 
 permissions:
