@@ -215,7 +215,7 @@ and drive the backlight (**observed** on an IN1204M, 2026-10-28):
 | `K04` | power | round "close" button | ON-OFF |
 | `K05` | back | "back" button | BACK |
 | `K06` | plus | `+` | + |
-| `K07` | set | `SET` | SET: opens the settings menu |
+| `K07` | set | `SET` | SET: opens the settings menu (**observed** 2026-11-18: at `01`) |
 | `K08` | OK | `OK` | OK |
 | `K09` | minus | `-` | − |
 
@@ -237,21 +237,35 @@ The remote also has VOL, LIGHT, TIME, DATE and TEMP keys that the app does not s
 ### Settings only reachable through the menu
 
 `K07` (SET) opens the clock's settings menu, and `K06`/`K09`/`K08`/`K05` then work as +, −, OK and
-back, with voice prompts. That reaches settings the protocol has no command for (manual, "Set the
-project function reference table"):
+back, with voice prompts (the touch buttons: L + R to open and close, L for +, R for −, OK for
+OK). The left tubes show the menu number and the right tubes its value. The manual's "Set the
+project function reference table" lists every item; those without a Bluetooth command can only
+be changed here. Menu numbers for the toggles come from the manual and the original app's labels
+(**inferred** where marked).
 
-| Menu | Setting | Values |
-|---|---|---|
-| 04 | digit transition effect | 0 normal, 1 cross-fade, 2 crossbar, 3 other |
-| 05 | colon | 0 off, 1 on |
-| 06 | brightness | 0 automatic, 1 ten manual levels |
-| 07 | prompt volume | 0 (silent) – 7 |
-| 08 | display mode | 1 h:m:s, 2 h:m + weekday, 3 month/day/weekday, 4 custom |
-| 12 | night mode | no time announcements below brightness 2 |
-| 13 | alarm melody | 1–6 |
-| 14 | weekday backlight | backlight colour shows the weekday (red … purple); colour locked |
-| 16 | tube protection | 0 off (not recommended), 5–15 minutes |
-| 18 | factory reset | 11 resets |
+| Menu | Setting | Values | Bluetooth |
+|---|---|---|---|
+| 01 | time set | 1 automatically from the phone over Bluetooth; 0 by hand (year, month, day, weekday, seconds in turn) | `S7x` |
+| 02 | alarm 1 | 1 on, then its time; 0 off | `S8x`, `AHH:MMA` |
+| 03 | alarm 2 | 1 on, then its time; 0 off | `S9x`, `AHH:MMB` |
+| 04 | digit transition | 0 normal, 1 cross-fade, 2 crossbar, 3 other | — |
+| 05 | colon | 0 off, 1 on | — |
+| 06 | brightness | 0 automatic, 1 ten manual levels | `SAx` (**inferred**) |
+| 07 | prompt volume | 0 (silent) – 7 | — |
+| 08 | display mode | 1 h:m:s, 2 h:m + weekday, 3 month/day/weekday, 4 custom | — |
+| 09 | hour format | 12 or 24 | `SBx` |
+| 10 | timing switch | 1 power-on time, 2 power-off time | `S0x`, `THH:MMO`, `THH:MMC` |
+| 11 | hourly chime | 0 off, 1 on | `SDx` |
+| 12 | night mode | 0 off, 1 on: no time announcements below brightness 2 | — |
+| 13 | alarm melody | 1–6 | — |
+| 14 | weekday backlight | 0 off, 1 on: the backlight shows the weekday (red, orange, yellow, green, cyan, blue, purple) and its colour can no longer be changed | — |
+| 15 | external switch | 0 off, 1 on: an on/off input for peripherals or DIY | `SFx` (**inferred**) |
+| 16 | tube protection | 0 off (not recommended), 5–15 minutes (5 recommended) | — |
+| 17 | voice language | 0 Chinese, 1 English | `SEx` |
+| 18 | factory reset | 00 keeps the settings, 11 restores the defaults | — |
+
+Ambient light sensing (`SCx`) has no menu item. How + and − step between menu numbers, and what
+a factory reset clears, are **unverified**: the manual only says to follow the voice prompts.
 
 ### Colour
 
@@ -298,8 +312,8 @@ R000-G255-B255 S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0 A07:30AA08:15BT0
 The original app accepted a frame when its length was 93, it started with `R` and it ended with
 `CSS`. The rewritten parsers also reject colour channels above 255; such frames are treated as
 missing and requested again. A time field that is not a time is reported as unknown instead: an
-IN1204M sent `T44:29C` (power-off) and `TG0:84O` (power-on) for times it had never received, and
-rejecting those frames hid every other setting.
+IN1204M sends `T44:29C` for a power-off time lost in a power cut (see *Power cuts*), and once sent
+`TG0:84O` for its power-on time; rejecting those frames hid every other setting.
 
 ### What a real IN1204M sends (2026-10-28, Chrome on macOS)
 
@@ -313,11 +327,95 @@ rejecting those frames hid every other setting.
   `R255-G176-B000`: each field × 7/16, rounded. Perhaps the brightness level (**inferred** from
   one frame). Both apps scale a reported colour back to full brightness (brightest channel 255)
   before showing it on the slider or sending it again.
-- **Junk in fields it never received.** Toggle `C` read `T`, and the power-on and power-off
-  times `TG0:84O` and `T44:29C`. The two copies of a frame were identical, so this is what the
-  clock held, not damage in transit. The owner had set the times (08:00 and 01:00) with the
-  original app, whose unacknowledged writes the clock often missed; set again from the web app,
-  they read back correctly.
+- **Junk in time fields.** Toggle `C` read `T`, and the power-on and power-off times
+  `TG0:84O` and `T44:29C`. The two copies of a frame were identical, so this is what the clock
+  held, not damage in transit. Set again from the web app, they read back correctly. The
+  power-off junk is what the clock reports after a power cut (see *Power cuts*); where the
+  power-on junk came from is **unverified**.
+
+### Power cuts (IN1204M, 2026-11-14 and 2026-11-18)
+
+The clock keeps none of its settings reliably across a power cut. Four cuts, read back with the
+web app (0.2.1, Chrome on macOS) after unplugging the clock for about 10–30 s:
+
+| Date | Set before the cut | Read after the cut |
+|---|---|---|
+| 11-14 | power-off 01:07 and power-on 01:08 (web app), schedule on | power-on `T01:08O` kept; power-off `T44:29C`; schedule `S01` kept |
+| 11-18 | red, steady (original app) | tubes **blue**, steady; colour `R000-G000-B000`; power-on `TG0:84O`, power-off `T44:29C`; schedule `S00` |
+| 11-18 | power-off 11:12 (original app) | power-off `T44:29C` |
+| 11-18 | power-on 09:10, power-off 11:12, schedule on, all read back; backlight off (`R000-G000-B000`) | both times and `S01` **kept**; tubes **blue**; frame byte for byte the same as before the cut |
+
+```
+11-14 before  …S90S01SA1SB0SCOSD0SE1SF0A00:00AA00:00BT08:00OT01:00CCSS   (then T01:07C, T01:08O sent)
+11-14 after   …S90S01SA1SB0SCOSD0SE1SF0A00:00AA00:00BT01:08OT44:29CCSS
+11-18 after   R000-G000-B000…S90S00SA1SB0SCOSD0SE1SF0A00:00AA00:00BTG0:84OT44:29CCSS
+```
+
+- **`T44:29C` and `TG0:84O` are the clock's values for a lost time.** Each came back identical
+  after separate cuts (and on 2026-10-28, in the first frame the web app ever read, before it
+  had written any time), so they are not damage from the new apps. Losing a time is
+  intermittent: power-off was lost in three cuts and kept in the fourth, power-on lost once and
+  kept twice, and once power-off went from `11:12` to `T44:29C` between two reads 6 minutes
+  apart with no cut known (the first connection after that got no answer to two `OSC`s,
+  perhaps because the clock was restarting).
+- **The backlight colour is not kept**, whichever app set it: the clock starts blue and steady,
+  and reports `R000-G000-B000` until a colour is sent. A black frame therefore means either
+  "backlight off" or "just restarted", and when the times survive, nothing in the frame shows
+  that the clock restarted. Whether the effect is kept cannot be told (the frame has
+  no field for it, and steady was set before the cut); the owner saw an animation after an
+  earlier cut with effects stopped.
+- **The scheduled power switch was off once after a cut.** Whether the cut turned it off or it
+  had been off before is **unverified**: the original app on the test phone cannot read the
+  settings, so its switches do not show the clock's state.
+- Toggle `C` read `O` in every frame from 2026-11-14 on: the apps show it as on (anything but
+  `0`). What `O` means is **unverified**.
+- The original app never met the backlight coming back on: it cannot set black (its slider
+  always sends one channel at 255), and it never sends settings on connecting, only `OSC`.
+
+**What the apps do.** Both remember the last known times, set from them or read from the clock,
+and send a lost one again when a frame reports it as not a time: Home Assistant on every poll,
+the web app on connecting. A time the clock reports is kept, as it may have been changed on the
+clock. Both also remember whether the backlight was last turned off from them, and while it was
+and the frame reports black, send `R000-G000-B000` again (the clock may be lit blue after a
+restart). A colour in the frame means it was turned on elsewhere: that clears it. A colour set
+from the apps is not restored after a restart: a black frame cannot tell a restart from off.
+
+### The scheduled power switch needs both times (IN1204M, 2026-11-18)
+
+`S01` is ignored while either schedule time is not a time. With power-on `TG0:84O` (original app)
+and with power-off `T44:29C` (web app), `S01` left the frame at `S00`; with both times set,
+`S01` was taken. `T09:10O` was taken with the switch off, so the times do not need the switch.
+After a power cut, set both times before switching the schedule on (**observed** once each).
+
+### Reconnecting
+
+Reading the settings means reconnecting (see *One answer per connection*). Reconnecting the moment
+Chrome reported the old link closed, the clock dropped the new link right after Chrome listed
+the services, and the next call failed with `GATT Server is disconnected. Cannot retrieve
+characteristics` (2 of 4 reads, 2026-11-18); connecting again by hand seconds later worked. The
+web app now waits 1 s after a disconnect before reconnecting, and opens a link the clock drops
+half-way once more before reporting a failure. Home Assistant reconnects only every poll, minutes
+apart.
+
+### The original app on Android 5 (bq Aquaris E4, 2026-11-17)
+
+The APK (`io.dcloud.H5DD29EBE`) is an HTML5 app: `assets/apps/H5DD29EBE/www/js/index.js` holds all
+of its protocol code, readable after `adb pull` of its `base.apk`. On this phone:
+
+- **No HCI snoop log.** The Aquaris E4 has a MediaTek chip, and its Bluetooth stack never wrote
+  `btsnoop_hci.log`, with the developer option on and Bluetooth restarted.
+- **logcat shows the traffic instead.** The app's `console.log` lines appear as `I/console`, and
+  the DCloud bridge logs every notification with its value in hex (`value:'00'` for the login
+  answer) as `D/WebView` lines. `D/BluetoothGatt` and `D/BtGatt.GattService` log each write and
+  its status, without the value. The WebView floods the small logcat buffer: record it to a file
+  (`adb logcat -v time BluetoothGatt:D BtGatt.GattService:D console:I '*:S'`).
+- **The app never got a status frame.** Its `OSC` after logging in was written (status 0) and
+  never answered on `FFE4`, so the app showed no settings. It asks once and does not retry.
+- **Writes from the app were lost.** Of `S01`, `T09:10O` and `T11:12C` set with it, the next
+  frame showed only `T11:12C` (though `S01` was refused anyway, see above).
+- **Each time is one write.** Setting a time sends `T` + `HH:MM` + `C` (or `O`, `A`, `B`) and
+  nothing else (`send_time`); a switch sends its `S` command (`handler`). There is no save
+  command.
 
 ### Reassembly
 
@@ -332,6 +430,9 @@ in a frame, so a lost or corrupted piece costs at most one frame.
 | 2026-10-27 | IN1204M, `XGGF-IN1204231115.1` | advertisement (`FFF0`, `FFB0`, manufacturer data), the GATT table |
 | 2026-10-28 | same, web app 0.1.1 in Chrome on macOS | password login; colour command (red and green swapped); `K01`–`K03`; status frame received, but rejected by 0.1.1 for its power-on and power-off times (`TG0:84O`, `T44:29C`) (the original app also showed no settings) |
 | 2026-10-28 | same, Pixel 9 (nRF Connect, web app 0.1.1) | no services discovered; disconnect about 20 s after connecting. HCI snoop log: the module's 56-byte service list under its own MTU of 23, dropped by Android (see *Service discovery on Android*) |
+| 2026-11-14 | same, web app 0.2.1 in Chrome on macOS | scheduled power-off and power-on (`T01:07C`, `T01:08O`) fire; after a power cut the power-off time is lost (`T44:29C`) and the rest kept (see *Power cuts*) |
+| 2026-11-17 | same, bq Aquaris E4 (Android 5.0, original app) | login; `OSC` unanswered; no HCI snoop log on its MediaTek stack (see *The original app on Android 5*) |
+| 2026-11-18 | same, web app 0.2.1 in Chrome on macOS, and the original app | colour and both times lost in power cuts; `S01` ignored while a schedule time is lost; the clock drops a link reopened at once (see *Power cuts*, *The scheduled power switch needs both times*, *Reconnecting*) |
 
 Everything else under *Commands*, and all of *Status frame*, still comes from the app's code and
 the manual. The tube toggles choose which tubes take the next colour (tubes left out keep theirs). Commands
@@ -340,8 +441,9 @@ are often not taken (see open question 10), which made their effect look random.
 ## Open questions
 
 These can only be settled with the clock itself. The fastest way: enable **Developer options →
-Enable Bluetooth HCI snoop log** on the old phone, use every control in the original app, take a
-bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the filter `btatt`.
+Enable Bluetooth HCI snoop log** on a phone with the original app, use every control in it, take a
+bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the filter `btatt`. On
+a MediaTek phone, read logcat instead (see *The original app on Android 5*).
 
 1. Notification sizes of the status frame, and whether the module negotiates a larger MTU.
 2. Whether UART writes work without the password login.
@@ -362,4 +464,7 @@ bug report (`adb bugreport`), and open `btsnoop_hci.log` in Wireshark with the f
     showed tube 2 off after `S21`. Candidates: writes dropped between Chrome and the module, the
     unanswered `OSC`s upsetting the clock's serial parser, or the clock missing bytes while busy.
     The web app now writes with response when the module allows it, and no longer sends `OSC`
-    after each command.
+    after each command. Some ignored commands were refused, not lost: `S01` while a schedule time
+    is lost (see *The scheduled power switch needs both times*).
+11. Which settings a power cut loses when every one was set and read back first, and whether the
+    backlight effect is kept (see *Power cuts*).

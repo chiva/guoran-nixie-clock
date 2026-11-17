@@ -27,6 +27,8 @@ import {
 const STATUS_ATTEMPTS = 2;
 /** A connection whose services are still missing after polling is dropped and opened once more. */
 const CONNECTION_ATTEMPTS = 2;
+/** A link the clock drops while it is being opened (logging in, subscribing) is opened once more. */
+const OPEN_ATTEMPTS = 2;
 const MS_PER_S = 1000;
 export const DEFAULT_TIMING = Object.freeze({
   authTimeoutMs: 5000,
@@ -38,6 +40,9 @@ export const DEFAULT_TIMING = Object.freeze({
    * services appeared (and an older version waited 3 s), so this does the same, up to 5 s. */
   discoveryPollMs: 500,
   discoveryPolls: 10,
+  /** Reconnecting the moment the old link closed, the clock dropped the new one before the login
+   * (IN1204M, 2026-11-18, 2 of 4 reads): give its module a moment first. */
+  reconnectSettleMs: 1000,
 });
 
 export class ClockConnectionError extends Error {
@@ -61,6 +66,11 @@ export class ClockDiscoveryError extends ClockConnectionError {
 /** Chrome no longer knows the remembered clock: only its device chooser can find it again. */
 export class ClockOutOfRangeError extends ClockConnectionError {
   name = 'ClockOutOfRangeError';
+}
+
+/** The clock dropped the link while it was being opened, after its services were found. */
+export class ClockLinkLostError extends ClockConnectionError {
+  name = 'ClockLinkLostError';
 }
 
 const encoder = new TextEncoder();
@@ -109,6 +119,7 @@ export class Clock extends EventTarget {
   #queue = Promise.resolve();
   #lastCommandAt = 0;
   #statusWaiters = new Set();
+  #opening = false;
   #timing;
 
   constructor(timing = {}) {
@@ -122,6 +133,12 @@ export class Clock extends EventTarget {
 
   get name() {
     return this.#device?.name ?? null;
+  }
+
+  /** Chrome's identifier for the chosen clock, stable for this site: unlike the name, it tells
+   * two clocks of the same model apart. */
+  get id() {
+    return this.#device?.id ?? null;
   }
 
   get connected() {
@@ -152,7 +169,25 @@ export class Clock extends EventTarget {
     return this.#open(password);
   }
 
+  /** Open the link, once more if the clock drops it half-way. Links dropped while opening are not
+   * announced as "disconnected": the page sees one connection attempt, which succeeds or throws. */
   async #open(password) {
+    this.#opening = true;
+    try {
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          return await this.#openOnce(password);
+        } catch (error) {
+          if (!(error instanceof ClockLinkLostError) || attempt >= OPEN_ATTEMPTS) throw error;
+          this.#traffic('info', `the clock dropped the link while connecting (${error.message}); connecting again`);
+        }
+      }
+    } finally {
+      this.#opening = false;
+    }
+  }
+
+  async #openOnce(password) {
     try {
       const services = await this.#connectWithServices();
       await this.#authenticate(services.get(AUTH_SERVICE), password);
@@ -170,9 +205,11 @@ export class Clock extends EventTarget {
       const mode = this.#tx.properties.write ? 'with' : 'without';
       this.#traffic('info', `command characteristic allows: ${allowed.join(', ')}; writing ${mode} response`);
     } catch (error) {
+      const dropped = !this.#device.gatt.connected;
       this.#device.gatt.disconnect();
       if (error instanceof ClockAuthError || error instanceof ClockConnectionError) throw error;
-      throw new ClockConnectionError(`connecting to ${this.name}: ${error.message}`);
+      const LinkError = dropped ? ClockLinkLostError : ClockConnectionError;
+      throw new LinkError(`connecting to ${this.name}: ${error.message}`);
     }
   }
 
@@ -229,6 +266,7 @@ export class Clock extends EventTarget {
       const closed = new Promise((resolve) => this.addEventListener('disconnected', resolve, { once: true }));
       this.disconnect();
       await closed;
+      await sleep(this.#timing.reconnectSettleMs);
     }
     return this.connect(password);
   }
@@ -348,6 +386,6 @@ export class Clock extends EventTarget {
     this.#tx = null;
     this.#assembler.reset();
     for (const waiter of this.#statusWaiters) waiter.reject(new ClockConnectionError('the clock disconnected'));
-    this.dispatchEvent(new Event('disconnected'));
+    if (!this.#opening) this.dispatchEvent(new Event('disconnected'));
   }
 }

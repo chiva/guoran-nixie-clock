@@ -28,7 +28,6 @@ from .protocol import (
     HUE_POSITIONS,
     RGB,
     Effect,
-    encode_color,
     full_brightness,
     hue_to_rgb,
 )
@@ -95,7 +94,7 @@ class GuoranBacklight(GuoranEntity, LightEntity):
         await self._set(BLACK)
 
     async def _set(self, rgb: RGB) -> None:
-        await self.coordinator.async_command(encode_color(rgb), self.coordinator.data.with_rgb(rgb))
+        await self.coordinator.async_set_color(rgb)
 
     @callback
     def _handle_coordinator_update(self) -> None:

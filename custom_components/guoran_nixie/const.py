@@ -18,6 +18,9 @@ DEFAULT_SYNC_TIME: Final = True
 TIME_SYNC_INTERVAL: Final = timedelta(hours=1)
 """How often the clock is set to Home Assistant's time (the original app sent it every second)."""
 
+STORAGE_VERSION: Final = 1
+"""The settings remembered per clock (times, backlight off), to set again when it forgets them."""
+
 DEFAULT_HUE_POSITION: Final = 765
 """Cyan, the original app's default colour: used when the light is turned on from black."""
 

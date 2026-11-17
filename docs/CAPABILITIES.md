@@ -21,6 +21,11 @@ backlight under each tube, three touch buttons and a 14-key IR remote. Manuals:
 | L + R | open/close the settings menu | |
 | OK + R | start the timer | |
 
+The apps' **Set**, **Plus**, **Minus**, **OK** and **Back** buttons do in the settings menu what
+L + R, L, R and OK do, and **Power** does what OK does outside it. **Set** in the web app opened
+the menu at `01` (**observed** on an IN1204M, 2026-11-18). The manual has no setting that turns
+the touch buttons off.
+
 Remote: ON-OFF, SET, BACK, OK, +, −, VOL, LIGHT (brightness), TIME, DATE, TEMP, and 1/2/3 for the
 backlight (change colour, fixed colour, colour-change mode). The Bluetooth app sends the first
 six; see [PROTOCOL.md § Keys](PROTOCOL.md#keys).
@@ -65,7 +70,12 @@ from one clock's name (`XGGF-IN1204231115.1`), not from the app.
 | 定时开关机 / Timing switch: 开机时间 boot time, 关机时间 off time | `S0x`, `THH:MMO`, `THH:MMC` | Scheduled power | `switch.xggf_1234_scheduled_power_on_off`, `time.xggf_1234_power_on_time`, `time.xggf_1234_power_off_time` |
 
 The original app only let you edit a time while its switch was on. Both new apps allow it at any
-time.
+time. The clock itself refuses to switch the schedule on until both its times are set.
+
+The clock forgets its backlight colour when it loses power, and its times now and then (see
+*Power cuts* in [PROTOCOL.md](PROTOCOL.md)). Both new apps remember the last known times and set
+a lost one again, and keep the backlight off if it was turned off from them: Home Assistant on its
+next poll, the web app when it connects.
 
 ## Other settings
 
@@ -85,7 +95,8 @@ The web app shows the same six switches under *Other settings*.
 Transition effect, colon, prompt volume, display mode, night mode, alarm melody, weekday backlight,
 tube protection and factory reset have no Bluetooth command. They are reached through the clock's
 menu, with the **Set**, **Plus**, **Minus**, **OK** and **Back** buttons in either app (the clock
-speaks each step). See [PROTOCOL.md § Settings only reachable through the menu](PROTOCOL.md#settings-only-reachable-through-the-menu).
+speaks each step). [PROTOCOL.md § Settings only reachable through the menu](PROTOCOL.md#settings-only-reachable-through-the-menu)
+lists all 18 menu items with their values and the Bluetooth command for each, where one exists.
 
 ## Connection
 

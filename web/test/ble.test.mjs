@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
-import { Clock, ClockAuthError, ClockConnectionError, ClockDiscoveryError, describeBytes } from '../ble.js';
+import { Clock, ClockAuthError, ClockConnectionError, ClockDiscoveryError, ClockLinkLostError, describeBytes } from '../ble.js';
 import {
   FACTORY_PASSWORD,
   NAME_PREFIX,
@@ -17,7 +17,7 @@ import {
 import { FakeClock } from './fake-bluetooth.mjs';
 
 const PASSWORD = '210709';
-const FAST = { authTimeoutMs: 30, statusTimeoutMs: 30, commandGapMs: 0, discoveryPollMs: 1, discoveryPolls: 10 };
+const FAST = { authTimeoutMs: 30, statusTimeoutMs: 30, commandGapMs: 0, discoveryPollMs: 1, discoveryPolls: 10, reconnectSettleMs: 0 };
 
 let fake;
 let clock;
@@ -39,6 +39,7 @@ describe('connect', () => {
     assert.deepEqual(fake.lastRequest.optionalServices, OPTIONAL_SERVICES);
     assert.equal(clock.connected, true);
     assert.equal(clock.name, 'XGGF-1234');
+    assert.equal(clock.id, 'fake-device-id');
     assert.deepEqual(fake.authWrites, [PASSWORD + PASSWORD]);
   });
 
@@ -237,6 +238,50 @@ describe('status', () => {
     assert.equal(status.times.alarm_1, '06:15');
     assert.equal(fake.connections, 2);
     assert.equal(fake.chooserShown, 1, 'the same clock, without the chooser');
+  });
+
+  it('waits for the clock to settle between closing the link and opening a new one', async () => {
+    const SETTLE_MS = 40;
+    const TIMER_SLACK_MS = 5;
+    clock = new Clock({ ...FAST, reconnectSettleMs: SETTLE_MS });
+    await clock.connect(PASSWORD);
+    const start = performance.now();
+    await clock.reconnect(PASSWORD);
+    const elapsed = performance.now() - start;
+    console.log(`reconnect took ${elapsed.toFixed(1)} ms with a ${SETTLE_MS} ms settle`);
+    assert.ok(elapsed >= SETTLE_MS - TIMER_SLACK_MS, `waited ${elapsed} ms`);
+    assert.ok(clock.connected);
+  });
+
+  it('opens the link again when the clock drops it right after discovery, without announcing it', async () => {
+    fake.droppedAfterDiscoveryConnections = 1;
+    let disconnects = 0;
+    clock.addEventListener('disconnected', () => (disconnects += 1));
+    const lines = [];
+    clock.addEventListener('traffic', (event) => lines.push(`${event.detail.direction} ${event.detail.text}`));
+
+    await clock.connect(PASSWORD);
+
+    console.log(lines.join('\n'));
+    assert.ok(clock.connected);
+    assert.equal(fake.connections, 2);
+    assert.equal(disconnects, 0, 'the dropped attempt is not a disconnect the page should show');
+    assert.ok(lines.some((line) => /^info the clock dropped the link while connecting .*Cannot retrieve characteristics/.test(line)));
+    assert.equal(fake.authWrites.length, 1, 'logged in once, on the link that held');
+  });
+
+  it('gives up when the clock drops the link on every attempt', async () => {
+    fake.droppedAfterDiscoveryConnections = 2;
+    let disconnects = 0;
+    clock.addEventListener('disconnected', () => (disconnects += 1));
+    await assert.rejects(clock.connect(PASSWORD), (error) => {
+      assert.ok(error instanceof ClockLinkLostError);
+      assert.match(error.message, /^connecting to XGGF-1234: GATT Server is disconnected/);
+      return true;
+    });
+    assert.equal(fake.connections, 2, 'one retry, no more');
+    assert.equal(disconnects, 0);
+    assert.equal(clock.connected, false);
   });
 
   it('connects on a reconnect while disconnected', async () => {

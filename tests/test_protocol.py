@@ -27,6 +27,7 @@ from custom_components.guoran_nixie.protocol import (
     encode_toggle,
     full_brightness,
     hue_to_rgb,
+    lost_times,
     parse_auth_result,
     parse_status,
     tube_count,
@@ -158,6 +159,34 @@ def test_parse_status_reports_a_time_field_that_is_not_a_time_as_unknown() -> No
     assert {
         setting.value: value and value.strftime("%H:%M") for setting, value in status.times.items()
     } == vector["times"]
+
+
+def test_parse_status_after_a_power_cut_loses_only_the_power_off_time() -> None:
+    vector = VECTORS["status_power_cycled"]
+    status = parse_status(vector["frame"])
+    print("times after a power cut:", dict(status.times))
+    assert {
+        setting.value: value and value.strftime("%H:%M") for setting, value in status.times.items()
+    } == vector["times"]
+
+
+def _times(values: dict[str, str | None]) -> dict[TimeSetting, time | None]:
+    return {
+        TimeSetting(setting): value and time.fromisoformat(value)
+        for setting, value in values.items()
+    }
+
+
+@pytest.mark.parametrize("vector", VECTORS["lost_times"], ids=lambda v: v["reason"])
+def test_lost_times_are_the_remembered_ones_the_clock_forgot(vector: dict) -> None:
+    remembered = {
+        setting: value
+        for setting, value in _times(vector["remembered"]).items()
+        if value is not None
+    }
+    lost = lost_times(_times(vector["times"]), remembered)
+    print("reported:", vector["times"], "remembered:", vector["remembered"], "lost:", lost)
+    assert lost == _times(vector["lost"])
 
 
 @pytest.mark.parametrize("vector", VECTORS["status_invalid"], ids=lambda v: v["reason"])

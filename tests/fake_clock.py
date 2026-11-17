@@ -86,7 +86,8 @@ class FakeClock:
         default_factory=lambda: dict.fromkeys(TimeSetting, time(7, 0))
     )
     unset_times: set[TimeSetting] = field(default_factory=set)
-    """Times the clock reports as `UNSET_TIME`, as a real one did for a never-set power-off time."""
+    """Times the clock reports as `UNSET_TIME`, as a real one does for a power-off time it lost in
+    a power cut. Setting the time again clears it."""
     ignore_status_requests: int = 0
     """Status requests to leave unanswered, as a flaky link would."""
     status_once_per_connection: bool = True
@@ -169,6 +170,13 @@ class FakeClock:
         if self._disconnected_callback is not None:
             self._disconnected_callback(self)
 
+    def power_cycle(self) -> None:
+        """Unplug and plug in again, as an IN1204M did on 2026-11-14: the power-off time is lost,
+        and the tubes light blue while the frame reports black."""
+        self.drop_connection()
+        self.unset_times.add(TimeSetting.POWER_OFF)
+        self.rgb = (0, 0, 0)
+
     def status_frame(self) -> str:
         return (
             encode_color(self.rgb)
@@ -218,6 +226,7 @@ class FakeClock:
             affixes = (match[1], match[4])
             setting = next(s for s, fmt in TIME_FORMATS.items() if fmt == affixes)
             self.times[setting] = time(int(match[2]), int(match[3]))
+            self.unset_times.discard(setting)
         elif kind == "status":
             self._answer_status()
 

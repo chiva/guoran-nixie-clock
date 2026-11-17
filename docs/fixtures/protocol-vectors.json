@@ -133,6 +133,31 @@
     "frame": "R000-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BTG0:84OT44:29CCSS",
     "times": { "alarm_1": "07:30", "alarm_2": "08:15", "power_on": null, "power_off": null }
   },
+  "status_power_cycled": {
+    "_comment": "IN1204M after a power cut, 2026-11-14: power-on 01:08 kept, power-off 01:07 lost.",
+    "frame": "R000-G000-B000S11S21S31S41S51S61S70S80S90S01SA1SB0SCOSD0SE1SF0A00:00AA00:00BT01:08OT44:29CCSS",
+    "times": { "alarm_1": "00:00", "alarm_2": "00:00", "power_on": "01:08", "power_off": null }
+  },
+  "lost_times": [
+    {
+      "reason": "forgotten power-off time comes back",
+      "times": { "alarm_1": "00:00", "alarm_2": "00:00", "power_on": "01:08", "power_off": null },
+      "remembered": { "power_on": "01:08", "power_off": "01:07" },
+      "lost": { "power_off": "01:07" }
+    },
+    {
+      "reason": "a time the clock reports wins over a remembered one",
+      "times": { "alarm_1": "07:30", "alarm_2": "08:15", "power_on": "06:00", "power_off": "23:00" },
+      "remembered": { "power_on": "07:00", "power_off": "22:00" },
+      "lost": {}
+    },
+    {
+      "reason": "nothing remembered, nothing to restore",
+      "times": { "alarm_1": null, "alarm_2": null, "power_on": null, "power_off": null },
+      "remembered": {},
+      "lost": {}
+    }
+  ],
   "status_invalid": [
     { "reason": "short", "frame": "R000-G255-B255S11CSS" },
     { "reason": "no terminator", "frame": "R000-G255-B255S11S21S30S41S51S61S70S81S90S01SA1SB0SC1SD0SE0SF0A07:30AA08:15BT07:00OT23:30CXYZ" },

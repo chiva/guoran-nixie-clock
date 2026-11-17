@@ -15,6 +15,7 @@ import {
   encodeToggle,
   fullBrightness,
   hueToRgb,
+  lostTimes,
   rgbToCss,
   rgbToHue,
   tubeCount,
@@ -22,6 +23,12 @@ import {
 } from './protocol.js';
 
 const PASSWORD_STORAGE_KEY = 'guoran-nixie.password';
+/** The last known times of each clock: it loses times now and then, in power cuts and without. */
+const timesStorageKey = (clockId) => `guoran-nixie.times.${clockId}`;
+/** Whether the backlight was last turned off from here: after a power cut the clock lights blue
+ * but still reports black, so off is sent again on connecting. */
+const backlightOffStorageKey = (clockId) => `guoran-nixie.backlight-off.${clockId}`;
+const isBlack = (rgb) => rgb.every((channel) => channel === 0);
 const TIME_SYNC_INTERVAL_MS = 60_000;
 const TOAST_MS = 4000;
 const LOG_LINES = 500;
@@ -97,7 +104,7 @@ const storage = {
     try {
       localStorage.setItem(key, value);
     } catch {
-      // Private mode or blocked storage: the password just is not remembered.
+      // Private mode or blocked storage: the setting just is not remembered.
     }
   },
 };
@@ -230,6 +237,49 @@ function logAction(control, value = null) {
   logEntry('action', value === null ? controlName(control) : `${controlName(control)}: ${value}`);
 }
 
+function rememberedTimes() {
+  try {
+    return JSON.parse(storage.get(timesStorageKey(clock.id))) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberTimes(times) {
+  const known = Object.fromEntries(Object.entries(times).filter(([, value]) => value !== null));
+  storage.set(timesStorageKey(clock.id), JSON.stringify({ ...rememberedTimes(), ...known }));
+}
+
+function rememberBacklightOff(off) {
+  if (clock.id) storage.set(backlightOffStorageKey(clock.id), off ? '1' : '0');
+}
+
+/**
+ * Send the clock what it forgot: the remembered times it reports as unknown (shown as set), and
+ * off again for a backlight turned off from here. A colour in the frame means the backlight was
+ * turned on elsewhere, which is respected. The clock sends each frame two or three times: only
+ * the first of a connection turns the backlight off, and a restored time is not sent again.
+ */
+function restoreForgottenSettings(next) {
+  const firstFrame = status === null;
+  if (!isBlack(next.rgb)) {
+    rememberBacklightOff(false);
+  } else if (firstFrame && storage.get(backlightOffStorageKey(clock.id)) === '1') {
+    logEntry('info', 'turning the backlight off again: the clock lights it after a power cut');
+    command(encodeColor(BLACK));
+  }
+  const lost = lostTimes(next.times, rememberedTimes());
+  for (const [setting, value] of Object.entries(lost)) {
+    if (status?.times[setting] === value) continue;
+    const [hour, minute] = value.split(':').map(Number);
+    logEntry('info', `the clock forgot ${TIME_LABELS[setting].toLowerCase()} ${value}: setting it again`);
+    command(encodeTime(setting, hour, minute));
+  }
+  const times = { ...next.times, ...lost };
+  rememberTimes(times);
+  return { ...next, times };
+}
+
 function render(next) {
   status = next;
   $('#unread').hidden = true;
@@ -252,6 +302,7 @@ function command(text) {
 
 /** Slider drags fire many events: send the latest colour only, one write at a time. */
 async function sendColor(rgb) {
+  rememberBacklightOff(isBlack(rgb));
   pendingColor = rgb;
   if (colorInFlight) return;
   colorInFlight = true;
@@ -269,6 +320,7 @@ async function sendColor(rgb) {
 /** Run an effect in the slider's colour; if it did not get through, the effect is unknown. */
 async function setEffect(next) {
   const rgb = hueToRgb(Number($('#hue').value));
+  rememberBacklightOff(false);
   renderColor(rgb);
   renderEffect(next);
   const sent = await run(async () => {
@@ -393,9 +445,11 @@ function wireEvents() {
     } else if (setting && event.target.value) {
       const [hour, minute] = event.target.value.split(':').map(Number);
       command(encodeTime(setting, hour, minute));
+      if (status) status.times[setting] = event.target.value;
+      rememberTimes({ [setting]: event.target.value });
     }
   });
-  clock.addEventListener('status', (event) => render(event.detail));
+  clock.addEventListener('status', (event) => render(restoreForgottenSettings(event.detail)));
   clock.addEventListener('traffic', ({ detail }) => logEntry(detail.direction, detail.text));
   $('#clear-log').addEventListener('click', () => ($('#log').textContent = ''));
   $('#copy-log').addEventListener('click', async () => {
