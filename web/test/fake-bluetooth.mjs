@@ -64,6 +64,7 @@ class FakeCharacteristic extends EventTarget {
 }
 
 export class FakeClock extends EventTarget {
+  id = 'fake-device-id';
   name = 'XGGF-1234';
   password = DEFAULT_PASSWORD;
   hasAuthService = true;
@@ -89,6 +90,9 @@ export class FakeClock extends EventTarget {
   /** Connections, from the first, that the clock drops before any service is discovered, as a
    * Pixel 9 saw: no services at all, then a disconnect about 20 s in. */
   droppedDiscoveryConnections = 0;
+  /** Connections, from the first, that the clock drops right after listing its services, as an
+   * IN1204M did when reconnected the moment the previous link closed (2026-11-18). */
+  droppedAfterDiscoveryConnections = 0;
   /** As Chrome on macOS after a disconnect: the device left Chrome's cache, so connecting fails
    * until the chooser scans for it again. */
   outOfRange = false;
@@ -137,9 +141,18 @@ export class FakeClock extends EventTarget {
           (uuid) => allowed.has(uuid) && (uuid !== AUTH_SERVICE || clock.hasAuthService),
         );
         if (!visible.length) throw new DOMException('No Services found in device.', 'NotFoundError');
+        if (clock.connections <= clock.droppedAfterDiscoveryConnections) queueMicrotask(() => clock.gatt.disconnect());
         return visible.map((uuid) => ({
           uuid,
-          getCharacteristic: async (charUuid) => clock.characteristics[charUuid],
+          getCharacteristic: async (charUuid) => {
+            if (!clock.gatt.connected) {
+              throw new DOMException(
+                'GATT Server is disconnected. Cannot retrieve characteristics. (Re)connect first with `device.gatt.connect`.',
+                'NetworkError',
+              );
+            }
+            return clock.characteristics[charUuid];
+          },
         }));
       },
     };

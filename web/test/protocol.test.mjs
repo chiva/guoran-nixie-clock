@@ -23,6 +23,7 @@ import {
   encodeToggle,
   fullBrightness,
   hueToRgb,
+  lostTimes,
   parseAuthResult,
   parseStatus,
   rgbToHue,
@@ -144,6 +145,13 @@ describe('status frames', () => {
     const { frame, times } = vectors.status_unset_time;
     assert.deepEqual(parseStatus(frame).times, times);
   });
+  it('keeps every time but the power-off one after a power cut', () => {
+    const { frame, times } = vectors.status_power_cycled;
+    assert.deepEqual(parseStatus(frame).times, times);
+  });
+  for (const { reason, times, remembered, lost } of vectors.lost_times) {
+    it(`finds the times the clock forgot: ${reason}`, () => assert.deepEqual(lostTimes(times, remembered), lost));
+  }
   for (const { reason, frame } of vectors.status_invalid) {
     it(`rejects a frame: ${reason}`, () => assert.throws(() => parseStatus(frame), StatusFrameError));
   }

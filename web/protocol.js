@@ -255,8 +255,8 @@ const TIMES_START = COLOR_LENGTH + TOGGLES.length * TOGGLE_LENGTH;
 /**
  * Decode a complete status frame: the clock's settings written as the commands that would set
  * them (R…-G…-B…, sixteen S<id><0|1>, four times) and closed by "CSS". Times come back "HH:MM",
- * or null for one that is not a time: an IN1204M sent "T44:29C" and "TG0:84O" for times it had
- * never received.
+ * or null for one that is not a time: an IN1204M reports "T44:29C" for a power-off time lost in
+ * a power cut, and sent "TG0:84O" for a power-on time.
  */
 export function parseStatus(frame) {
   if (
@@ -286,6 +286,21 @@ export function parseStatus(frame) {
     times[setting] = valid ? `${match[1]}:${match[2]}` : null;
   });
   return { rgb, toggles, times };
+}
+
+/**
+ * The remembered times ("HH:MM" by setting) the clock reports as unknown, to send it again. An
+ * IN1204M forgets its power-off time on a power cut and reports "T44:29C" from then on (observed
+ * 2026-11-14), so the schedule would never switch it off. A time the clock reports is kept: it
+ * may have been changed on the clock itself.
+ */
+export function lostTimes(times, remembered) {
+  return Object.fromEntries(
+    TIME_SETTINGS.filter((setting) => times[setting] === null && remembered[setting]).map((setting) => [
+      setting,
+      remembered[setting],
+    ]),
+  );
 }
 
 /** Split a write to fit one ATT packet: a 23-character time sync exceeds the default 20. */

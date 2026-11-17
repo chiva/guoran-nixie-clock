@@ -48,6 +48,9 @@ HTTPS, which Web Bluetooth requires. Click **Connect** and pick the `XGGF…` cl
 - iPhone and iPad browsers do not support Web Bluetooth.
 - The clock reports its settings only right after connecting, so **Read clock settings**
   reconnects. The *Bluetooth log* at the bottom shows every command and reply.
+- **A power cut makes the clock forget** its scheduled power times and backlight colour. The web
+  app remembers the times and sets lost ones again when it connects; Home Assistant does it on
+  every poll.
 - **Android does not work (known issue):** the clock's oversized service list is discarded by
   Android, and a web page cannot work around it. Use Chrome on a computer (tested on macOS) or
   Home Assistant.

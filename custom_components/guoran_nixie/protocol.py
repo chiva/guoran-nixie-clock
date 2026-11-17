@@ -327,12 +327,28 @@ def _parse_time(field: str) -> time | None:
         return None
 
 
+def lost_times(
+    times: Mapping[TimeSetting, time | None], remembered: Mapping[TimeSetting, time]
+) -> dict[TimeSetting, time]:
+    """The remembered times the clock reports as unknown, to send it again.
+
+    An IN1204M forgets its power-off time on a power cut and reports `T44:29C` from then on
+    (observed 2026-11-14), so the schedule would never switch it off. A time the clock reports
+    is kept: it may have been changed on the clock itself.
+    """
+    return {
+        setting: remembered[setting]
+        for setting in TimeSetting
+        if times[setting] is None and setting in remembered
+    }
+
+
 def parse_status(frame: str) -> ClockStatus:
     """Decode a complete status frame: the clock's current settings, written as the commands that
     would set them (`R…-G…-B…`, sixteen `S<id><0|1>`, four times) and closed by `CSS`.
 
-    A time field that is not a time is None: an IN1204M sent `T44:29C` and `TG0:84O` for times
-    it had never received.
+    A time field that is not a time is None: an IN1204M reports `T44:29C` for a power-off time
+    lost in a power cut, and sent `TG0:84O` for a power-on time.
     """
     if (
         len(frame) != STATUS_LENGTH

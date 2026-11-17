@@ -65,7 +65,11 @@ from one clock's name (`XGGF-IN1204231115.1`), not from the app.
 | 定时开关机 / Timing switch: 开机时间 boot time, 关机时间 off time | `S0x`, `THH:MMO`, `THH:MMC` | Scheduled power | `switch.xggf_1234_scheduled_power_on_off`, `time.xggf_1234_power_on_time`, `time.xggf_1234_power_off_time` |
 
 The original app only let you edit a time while its switch was on. Both new apps allow it at any
-time.
+time. The clock itself refuses to switch the schedule on until both its times are set.
+
+The clock forgets its times and backlight colour when it loses power (see *Power cuts* in
+[PROTOCOL.md](PROTOCOL.md)). Both new apps remember the last known times and set a lost one again:
+Home Assistant on its next poll, the web app when it connects.
 
 ## Other settings
 

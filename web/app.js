@@ -15,6 +15,7 @@ import {
   encodeToggle,
   fullBrightness,
   hueToRgb,
+  lostTimes,
   rgbToCss,
   rgbToHue,
   tubeCount,
@@ -22,6 +23,8 @@ import {
 } from './protocol.js';
 
 const PASSWORD_STORAGE_KEY = 'guoran-nixie.password';
+/** The last known times of each clock: it forgets its power-off time on a power cut. */
+const timesStorageKey = (clockId) => `guoran-nixie.times.${clockId}`;
 const TIME_SYNC_INTERVAL_MS = 60_000;
 const TOAST_MS = 4000;
 const LOG_LINES = 500;
@@ -97,7 +100,7 @@ const storage = {
     try {
       localStorage.setItem(key, value);
     } catch {
-      // Private mode or blocked storage: the password just is not remembered.
+      // Private mode or blocked storage: the setting just is not remembered.
     }
   },
 };
@@ -228,6 +231,36 @@ function controlValue(input) {
 
 function logAction(control, value = null) {
   logEntry('action', value === null ? controlName(control) : `${controlName(control)}: ${value}`);
+}
+
+function rememberedTimes() {
+  try {
+    return JSON.parse(storage.get(timesStorageKey(clock.id))) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberTimes(times) {
+  const known = Object.fromEntries(Object.entries(times).filter(([, value]) => value !== null));
+  storage.set(timesStorageKey(clock.id), JSON.stringify({ ...rememberedTimes(), ...known }));
+}
+
+/**
+ * Send the clock the remembered times it reports as unknown, and show them as set. The clock
+ * sends each frame two or three times: a time already restored from the first is not sent again.
+ */
+function restoreLostTimes(next) {
+  const lost = lostTimes(next.times, rememberedTimes());
+  for (const [setting, value] of Object.entries(lost)) {
+    if (status?.times[setting] === value) continue;
+    const [hour, minute] = value.split(':').map(Number);
+    logEntry('info', `the clock forgot ${TIME_LABELS[setting].toLowerCase()} ${value}: setting it again`);
+    command(encodeTime(setting, hour, minute));
+  }
+  const times = { ...next.times, ...lost };
+  rememberTimes(times);
+  return { ...next, times };
 }
 
 function render(next) {
@@ -393,9 +426,11 @@ function wireEvents() {
     } else if (setting && event.target.value) {
       const [hour, minute] = event.target.value.split(':').map(Number);
       command(encodeTime(setting, hour, minute));
+      if (status) status.times[setting] = event.target.value;
+      rememberTimes({ [setting]: event.target.value });
     }
   });
-  clock.addEventListener('status', (event) => render(event.detail));
+  clock.addEventListener('status', (event) => render(restoreLostTimes(event.detail)));
   clock.addEventListener('traffic', ({ detail }) => logEntry(detail.direction, detail.text));
   $('#clear-log').addEventListener('click', () => ($('#log').textContent = ''));
   $('#copy-log').addEventListener('click', async () => {

@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import GuoranConfigEntry, GuoranCoordinator
 from .entity import GuoranEntity
-from .protocol import TimeSetting, encode_time
+from .protocol import TimeSetting
 
 PARALLEL_UPDATES = 1
 
@@ -35,7 +35,4 @@ class GuoranTime(GuoranEntity, TimeEntity):
 
     async def async_set_value(self, value: time) -> None:
         # The clock keeps minutes only.
-        value = value.replace(second=0, microsecond=0)
-        await self.coordinator.async_command(
-            encode_time(self.setting, value), self.coordinator.data.with_time(self.setting, value)
-        )
+        await self.coordinator.async_set_time(self.setting, value.replace(second=0, microsecond=0))
