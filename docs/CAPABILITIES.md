@@ -21,6 +21,15 @@ backlight under each tube, three touch buttons and a 14-key IR remote. Manuals:
 | L + R | open/close the settings menu | |
 | OK + R | start the timer | |
 
+**When the touch buttons stop responding**, the clock still takes the same presses over
+Bluetooth: on an IN1204M with dead touch buttons, **Set** in the web app opened the menu at `01`
+(2026-11-18). The apps' **Set**, **Plus**, **Minus**, **OK** and **Back** buttons then stand in
+for L + R, L, R and OK, and **Power** for OK. The manual has no troubleshooting for the touch
+buttons and no setting that turns them off, so a factory reset is unlikely to help. Worth trying
+first: unplug the clock for 10 s and plug it back in without touching the top (touch pads
+commonly calibrate at power-up), a 5 V supply good for 400 mA, and a firmly seated USB plug (the
+manual calls the socket fragile).
+
 Remote: ON-OFF, SET, BACK, OK, +, −, VOL, LIGHT (brightness), TIME, DATE, TEMP, and 1/2/3 for the
 backlight (change colour, fixed colour, colour-change mode). The Bluetooth app sends the first
 six; see [PROTOCOL.md § Keys](PROTOCOL.md#keys).
@@ -90,7 +99,8 @@ The web app shows the same six switches under *Other settings*.
 Transition effect, colon, prompt volume, display mode, night mode, alarm melody, weekday backlight,
 tube protection and factory reset have no Bluetooth command. They are reached through the clock's
 menu, with the **Set**, **Plus**, **Minus**, **OK** and **Back** buttons in either app (the clock
-speaks each step). See [PROTOCOL.md § Settings only reachable through the menu](PROTOCOL.md#settings-only-reachable-through-the-menu).
+speaks each step). [PROTOCOL.md § Settings only reachable through the menu](PROTOCOL.md#settings-only-reachable-through-the-menu)
+lists all 18 menu items with their values and the Bluetooth command for each, where one exists.
 
 ## Connection
 

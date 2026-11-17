@@ -215,7 +215,7 @@ and drive the backlight (**observed** on an IN1204M, 2026-10-28):
 | `K04` | power | round "close" button | ON-OFF |
 | `K05` | back | "back" button | BACK |
 | `K06` | plus | `+` | + |
-| `K07` | set | `SET` | SET: opens the settings menu |
+| `K07` | set | `SET` | SET: opens the settings menu (**observed** 2026-11-18: at `01`) |
 | `K08` | OK | `OK` | OK |
 | `K09` | minus | `-` | − |
 
@@ -237,21 +237,35 @@ The remote also has VOL, LIGHT, TIME, DATE and TEMP keys that the app does not s
 ### Settings only reachable through the menu
 
 `K07` (SET) opens the clock's settings menu, and `K06`/`K09`/`K08`/`K05` then work as +, −, OK and
-back, with voice prompts. That reaches settings the protocol has no command for (manual, "Set the
-project function reference table"):
+back, with voice prompts (the touch buttons: L + R to open and close, L for +, R for −, OK for
+OK). The left tubes show the menu number and the right tubes its value. The manual's "Set the
+project function reference table" lists every item; those without a Bluetooth command can only
+be changed here. Menu numbers for the toggles come from the manual and the original app's labels
+(**inferred** where marked).
 
-| Menu | Setting | Values |
-|---|---|---|
-| 04 | digit transition effect | 0 normal, 1 cross-fade, 2 crossbar, 3 other |
-| 05 | colon | 0 off, 1 on |
-| 06 | brightness | 0 automatic, 1 ten manual levels |
-| 07 | prompt volume | 0 (silent) – 7 |
-| 08 | display mode | 1 h:m:s, 2 h:m + weekday, 3 month/day/weekday, 4 custom |
-| 12 | night mode | no time announcements below brightness 2 |
-| 13 | alarm melody | 1–6 |
-| 14 | weekday backlight | backlight colour shows the weekday (red … purple); colour locked |
-| 16 | tube protection | 0 off (not recommended), 5–15 minutes |
-| 18 | factory reset | 11 resets |
+| Menu | Setting | Values | Bluetooth |
+|---|---|---|---|
+| 01 | time set | 1 automatically from the phone over Bluetooth; 0 by hand (year, month, day, weekday, seconds in turn) | `S7x` |
+| 02 | alarm 1 | 1 on, then its time; 0 off | `S8x`, `AHH:MMA` |
+| 03 | alarm 2 | 1 on, then its time; 0 off | `S9x`, `AHH:MMB` |
+| 04 | digit transition | 0 normal, 1 cross-fade, 2 crossbar, 3 other | — |
+| 05 | colon | 0 off, 1 on | — |
+| 06 | brightness | 0 automatic, 1 ten manual levels | `SAx` (**inferred**) |
+| 07 | prompt volume | 0 (silent) – 7 | — |
+| 08 | display mode | 1 h:m:s, 2 h:m + weekday, 3 month/day/weekday, 4 custom | — |
+| 09 | hour format | 12 or 24 | `SBx` |
+| 10 | timing switch | 1 power-on time, 2 power-off time | `S0x`, `THH:MMO`, `THH:MMC` |
+| 11 | hourly chime | 0 off, 1 on | `SDx` |
+| 12 | night mode | 0 off, 1 on: no time announcements below brightness 2 | — |
+| 13 | alarm melody | 1–6 | — |
+| 14 | weekday backlight | 0 off, 1 on: the backlight shows the weekday (red, orange, yellow, green, cyan, blue, purple) and its colour can no longer be changed | — |
+| 15 | external switch | 0 off, 1 on: an on/off input for peripherals or DIY | `SFx` (**inferred**) |
+| 16 | tube protection | 0 off (not recommended), 5–15 minutes (5 recommended) | — |
+| 17 | voice language | 0 Chinese, 1 English | `SEx` |
+| 18 | factory reset | 00 keeps the settings, 11 restores the defaults | — |
+
+Ambient light sensing (`SCx`) has no menu item. How + and − step between menu numbers, and what
+a factory reset clears, are **unverified**: the manual only says to follow the voice prompts.
 
 ### Colour
 
