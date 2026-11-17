@@ -19,7 +19,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from .client import GuoranClient
 from .const import DOMAIN
-from .coordinator import GuoranConfigEntry, GuoranCoordinator, time_store
+from .coordinator import GuoranConfigEntry, GuoranCoordinator, settings_store
 
 PLATFORMS: list[Platform] = [Platform.BUTTON, Platform.LIGHT, Platform.SWITCH, Platform.TIME]
 
@@ -69,4 +69,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: GuoranConfigEntry) -> b
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: GuoranConfigEntry) -> None:
-    await time_store(hass, entry.entry_id).async_remove()
+    await settings_store(hass, entry.entry_id).async_remove()

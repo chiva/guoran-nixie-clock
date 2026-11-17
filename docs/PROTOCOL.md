@@ -321,14 +321,15 @@ IN1204M sends `T44:29C` for a power-off time lost in a power cut (see *Power cut
 
 ### Power cuts (IN1204M, 2026-11-14 and 2026-11-18)
 
-The clock keeps none of its settings reliably across a power cut. Three cuts, read back with the
-web app (0.2.1, Chrome on macOS) after unplugging the clock for about 10 s:
+The clock keeps none of its settings reliably across a power cut. Four cuts, read back with the
+web app (0.2.1, Chrome on macOS) after unplugging the clock for about 10–30 s:
 
 | Date | Set before the cut | Read after the cut |
 |---|---|---|
 | 11-14 | power-off 01:07 and power-on 01:08 (web app), schedule on | power-on `T01:08O` kept; power-off `T44:29C`; schedule `S01` kept |
 | 11-18 | red, steady (original app) | tubes **blue**, steady; colour `R000-G000-B000`; power-on `TG0:84O`, power-off `T44:29C`; schedule `S00` |
 | 11-18 | power-off 11:12 (original app) | power-off `T44:29C` |
+| 11-18 | power-on 09:10, power-off 11:12, schedule on, all read back; backlight off (`R000-G000-B000`) | both times and `S01` **kept**; tubes **blue**; frame byte for byte the same as before the cut |
 
 ```
 11-14 before  …S90S01SA1SB0SCOSD0SE1SF0A00:00AA00:00BT08:00OT01:00CCSS   (then T01:07C, T01:08O sent)
@@ -337,11 +338,16 @@ web app (0.2.1, Chrome on macOS) after unplugging the clock for about 10 s:
 ```
 
 - **`T44:29C` and `TG0:84O` are the clock's values for a lost time.** Each came back identical
-  after separate cuts (and on 2026-10-28), so they are not write damage. Whichever app set the
-  time, power-off was lost every time; power-on was kept once and lost once.
+  after separate cuts (and on 2026-10-28, in the first frame the web app ever read, before it
+  had written any time), so they are not damage from the new apps. Losing a time is
+  intermittent: power-off was lost in three cuts and kept in the fourth, power-on lost once and
+  kept twice, and once power-off went from `11:12` to `T44:29C` between two reads 6 minutes
+  apart with no cut known (the first connection after that got no answer to two `OSC`s,
+  perhaps because the clock was restarting).
 - **The backlight colour is not kept**, whichever app set it: the clock starts blue and steady,
   and reports `R000-G000-B000` until a colour is sent. A black frame therefore means either
-  "backlight off" or "just restarted". Whether the effect is kept cannot be told (the frame has
+  "backlight off" or "just restarted", and when the times survive, nothing in the frame shows
+  that the clock restarted. Whether the effect is kept cannot be told (the frame has
   no field for it, and steady was set before the cut); the owner saw an animation after an
   earlier cut with effects stopped.
 - **The scheduled power switch was off once after a cut.** Whether the cut turned it off or it
@@ -349,13 +355,16 @@ web app (0.2.1, Chrome on macOS) after unplugging the clock for about 10 s:
   settings, so its switches do not show the clock's state.
 - Toggle `C` read `O` in every frame from 2026-11-14 on: the apps show it as on (anything but
   `0`). What `O` means is **unverified**.
-- The original app never met this: it cannot set black (its slider always sends one channel at
-  255) and it never sends settings on connecting, only `OSC`.
+- The original app never met the backlight coming back on: it cannot set black (its slider
+  always sends one channel at 255), and it never sends settings on connecting, only `OSC`.
 
 **What the apps do.** Both remember the last known times, set from them or read from the clock,
 and send a lost one again when a frame reports it as not a time: Home Assistant on every poll,
 the web app on connecting. A time the clock reports is kept, as it may have been changed on the
-clock. **Unverified:** what a lost backlight does to an automation that expects the last colour.
+clock. Both also remember whether the backlight was last turned off from them, and while it was
+and the frame reports black, send `R000-G000-B000` again (the clock may be lit blue after a
+restart). A colour in the frame means it was turned on elsewhere: that clears it. A colour set
+from the apps is not restored after a restart: a black frame cannot tell a restart from off.
 
 ### The scheduled power switch needs both times (IN1204M, 2026-11-18)
 

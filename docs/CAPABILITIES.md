@@ -67,9 +67,10 @@ from one clock's name (`XGGF-IN1204231115.1`), not from the app.
 The original app only let you edit a time while its switch was on. Both new apps allow it at any
 time. The clock itself refuses to switch the schedule on until both its times are set.
 
-The clock forgets its times and backlight colour when it loses power (see *Power cuts* in
-[PROTOCOL.md](PROTOCOL.md)). Both new apps remember the last known times and set a lost one again:
-Home Assistant on its next poll, the web app when it connects.
+The clock forgets its backlight colour when it loses power, and its times now and then (see
+*Power cuts* in [PROTOCOL.md](PROTOCOL.md)). Both new apps remember the last known times and set
+a lost one again, and keep the backlight off if it was turned off from them: Home Assistant on its
+next poll, the web app when it connects.
 
 ## Other settings
 

@@ -171,10 +171,11 @@ class FakeClock:
             self._disconnected_callback(self)
 
     def power_cycle(self) -> None:
-        """Unplug and plug in again: an IN1204M keeps every setting but its power-off time
-        (observed 2026-11-14)."""
+        """Unplug and plug in again, as an IN1204M did on 2026-11-14: the power-off time is lost,
+        and the tubes light blue while the frame reports black."""
         self.drop_connection()
         self.unset_times.add(TimeSetting.POWER_OFF)
+        self.rgb = (0, 0, 0)
 
     def status_frame(self) -> str:
         return (
