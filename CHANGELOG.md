@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/chiva/guoran-nixie-clock/compare/v0.2.1...v0.2.2) (2026-11-17)
+
+
+### Bug Fixes
+
+* restore settings the clock forgets, and reconnect reliably ([#26](https://github.com/chiva/guoran-nixie-clock/issues/26)) ([1f6407e](https://github.com/chiva/guoran-nixie-clock/commit/1f6407ed26f2c796deb61ae9d53f3c5c7a8d8ee2))
+
 ## [0.2.1](https://github.com/chiva/guoran-nixie-clock/compare/v0.2.0...v0.2.1) (2026-11-01)
 
 
